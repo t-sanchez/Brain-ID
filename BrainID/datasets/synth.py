@@ -864,7 +864,6 @@ class BaseSynth(Dataset):
                 Frp,
             )
         else:
-<<<<<<< HEAD
             return {
                 "name": os.path.basename(self.names[idx]).split(".nii")[0]
             }, self.process_sample(
@@ -889,7 +888,3 @@ class BaseSynth(Dataset):
                 self.noise_std_min,
                 self.noise_std_max,
             )
-=======
-            return {'name': os.path.basename(self.names[idx]).split('.nii')[0]}, self.process_sample(photo_mode, spac, thickness, resolution, flip, mus, sigmas, G, S, D, I, PTH, [xx2, yy2, zz2],
-                                            self.gamma_std, self.bf_scale_min, self.bf_scale_max, self.bf_std_min, self.bf_std_max, self.noise_std_min, self.noise_std_max)
->>>>>>> fix_typos_preprocessing
