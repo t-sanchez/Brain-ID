@@ -75,7 +75,9 @@ for i, name in enumerate(subjs):
             mask, aff = utils.MRIread(
                 os.path.join(mask_save_dir, basename + ".nii")
             )
-            img, aff = utils.MRIread(os.path.join(img_dir, name))
+            img, aff = utils.MRIread(
+                os.path.join(synthsr_save_dir, basename + ".nii")
+            )
             img *= mask  # skull-stripping
             utils.MRIwrite(
                 img, aff, os.path.join(img_strip_save_dir, basename + ".nii")
