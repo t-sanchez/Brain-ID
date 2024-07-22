@@ -25,8 +25,8 @@ dataset_options = {
 
 dataset_paths = {
     "synth": {
-        "train": "/path/to/data/synth",
-        "test": "/path/to/data/synth/T1",
+        "train": "/media/tsanchez/tsanchez_data/data/brain-ID/synth/",
+        "test": "/media/tsanchez/tsanchez_data/data/brain-ID/synth/T1",
     },
     "ADNI": {
         "T1": "/path/to/data/synth/T1",
