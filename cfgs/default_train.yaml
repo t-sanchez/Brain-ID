@@ -16,7 +16,7 @@ device_segmenter:
 
 
 task: feat-anat # choices: feature training: { feat-anat, feat-seg, feat-anat-seg }, downstream task training: { seg, sr, reg, bf }
-task_f_maps: [64]
+task_f_maps: [32]
 
 
 ## losses and weights
@@ -85,7 +85,7 @@ test_subset:
 
  
 
-seed: 42 
+seed: 6546
 # distributed training parameters
 # number of distributed processes
 world_size: 1
@@ -98,7 +98,7 @@ backbone: unet3d # options: unet2d, unet3d, res_unet3d, res_unet3d_se
 
 # UNet seting 
 in_channels: 1 
-f_maps: 64 
+f_maps: 32
 f_maps_supervised_seg_cnn: 32
 num_groups: 8
 num_levels: 5

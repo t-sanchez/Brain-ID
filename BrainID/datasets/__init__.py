@@ -6,7 +6,7 @@ from .synth import BaseSynth
 from .id_synth import IDSynth, DeformIDSynth
 from .id_synth_eval import IDSynthEval, DeformIDSynthEval
 from .supervised import ContrastSpecificDataset
-
+from .fetal_id_synth import FetalIDSynth
 
 dataset_options = {
     "train": {
@@ -93,6 +93,29 @@ def build_dataset_single(dataset_name, split, args, device):
         )
     else:
         return dataset_options[split][dataset_name](args, data_dir, device)
+
+
+from hydra import compose, initialize_config_dir
+from hydra.utils import instantiate
+
+
+def build_fetal_dataset(config_dir):
+    """Helper function to build a fetal dataset."""
+    with initialize_config_dir(
+        version_base=None,
+        config_dir=config_dir,
+    ):
+        cfg = compose(
+            config_name="dhcp_onlinesynth",
+        )
+        dm = instantiate(cfg)
+        train_args = dm.get_dataset_args(
+            dm.train_path,
+            dm.train_transform,
+            dm.train_splits,
+        )
+        del dm
+        return FetalIDSynth(**train_args)
 
 
 def build_dataset_multi(dataset_name_list, split, args, device):

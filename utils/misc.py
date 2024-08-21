@@ -373,6 +373,7 @@ def launch_job(cfg, func, daemon = False):
 
 def preprocess_cfg(cfg_files, cfg_dir = ''):
     config = load_config(cfg_files[0], cfg_files[1:], cfg_dir)
+    
     args = nested_dict_to_namespace(config)
     return args
 

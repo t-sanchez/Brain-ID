@@ -12,10 +12,10 @@ eval_only: False
 debug: False 
 
 resume: False
-reset_epoch: False
+reset_epoch: False 
 resume_optim: True
 ckp_path: 
-
+train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 
 lr_drops: [70,85]
 
@@ -24,5 +24,9 @@ batch_size: 1
 mild_samples: 2
 all_samples: 4
 
+train_patch: True
+patch_size: 128
+patch_boundary: 0
+patch_per_subject: 4
 #log_itr: 20
 #vis_itr: 1

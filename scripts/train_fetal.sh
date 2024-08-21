@@ -15,7 +15,7 @@
 
 
 # exp-specific cfg #
-exp_cfg_file=cfgs/train/anat.yaml
+exp_cfg_file=cfgs/train/anat_fetal.yaml
 
 
 date;hostname;pwd

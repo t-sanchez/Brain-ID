@@ -10,6 +10,7 @@ import time
 from argparse import Namespace
 from pathlib import Path
 
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -21,10 +22,10 @@ import utils.logging as logging
 import utils.misc as utils
 
 from BrainID.visualizer import TaskVisualizer, FeatVisualizer
-from BrainID.datasets import build_dataset_single
+from BrainID.datasets import build_dataset_single, build_fetal_dataset
 from BrainID.models import build_feat_model, build_optimizer, build_schedulers
 from BrainID.engine import train_one_epoch_feature
-
+import pdb
 
 logger = logging.get_logger(__name__)
 
@@ -35,7 +36,7 @@ default_data_file = "cfgs/default_dataset.yaml"
 default_val_file = "cfgs/default_val.yaml"
 submit_cfg_file = "cfgs/submit.yaml"
 
-cfg_dir = "cfgs/train"
+cfg_dir = ""
 
 
 def get_params_groups(model):
@@ -102,21 +103,56 @@ def train(args: Namespace) -> None:
     torch.backends.cudnn.deterministic = True
 
     # ============ preparing data ... ============
-    dataset_train = build_dataset_single(
-        vars(args.dataset_name)["train"],
-        split="train",
-        args=args,
-        device=(
-            args.device_generator
-            if args.device_generator is not None
-            else device
-        ),
+    # dataset_train = build_dataset_single(
+    #     vars(args.dataset_name)["train"],
+    #     split="train",
+    #     args=args,
+    #     device=(
+    #         args.device_generator
+    #         if args.device_generator is not None
+    #         else device
+    #     ),
+    # )
+    dataset_train = build_fetal_dataset(
+        config_dir=args.train_fetal_cfg,
     )
 
+    from BrainID.datasets.fetal_id_synth import (
+        RandomBlockPatchFetalDataset,
+        BlockRandomSampler,
+    )
+
+    if args.train_patch:
+        dataset_train = RandomBlockPatchFetalDataset(
+            dataset=dataset_train,
+            patch_size=args.patch_size,
+            boundary=args.patch_boundary,
+            patch_per_subject=args.patch_per_subject,
+        )
+    # out = dataset_train_patch[0]
+    # import nibabel as nib
+
+    # for i, samp in enumerate(out[1]):
+    #     gen = samp["input"]
+    #     gen = gen.squeeze(0).cpu().numpy()
+    #     img = samp["image_def"]
+    #     img = img.squeeze(0).cpu().numpy()
+    #     nib.save(nib.Nifti1Image(gen, np.eye(4)), f"output/gen_{i}.nii.gz")
+    #     nib.save(nib.Nifti1Image(img, np.eye(4)), f"output/uimg_{i}.nii.gz")
+    # nib.save(
+    #     nib.Nifti1Image(out[0]["image"].squeeze(0).cpu().numpy(), np.eye(4)),
+    #     "output/img.nii.gz",
+    # )
+    # import pdb
+
+    # pdb.set_trace()
     if args.num_gpus > 1:
         sampler_train = utils.DistributedWeightedSampler(dataset_train)
     else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_train = BlockRandomSampler(
+            dataset_train, args.patch_per_subject
+        )
+        # sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
     batch_sampler = torch.utils.data.BatchSampler(
         sampler_train, args.batch_size, drop_last=True
@@ -127,13 +163,15 @@ def train(args: Namespace) -> None:
         batch_sampler=batch_sampler,
         # collate_fn=utils.collate_fn, # apply custom data cooker if needed
         num_workers=args.num_workers,
+        multiprocessing_context="spawn" if args.num_workers > 0 else None,
+        persistent_workers=True,
     )
-
     visualizers = {"result": TaskVisualizer(args)}
     if args.visualizer.feat_vis:
         visualizers["feature"] = FeatVisualizer(args)
 
     # ============ building model ... ============
+
     args, model, processors, criterion, postprocessor = build_feat_model(
         args, device=device
     )  # train: True; test: False
@@ -257,4 +295,5 @@ if __name__ == "__main__":
         ],
         cfg_dir=cfg_dir,
     )
-    utils.launch_job(args, train)
+    train(args)
+    # utils.launch_job(args, train)
