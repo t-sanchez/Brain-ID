@@ -56,33 +56,27 @@ class FetalIDSynth(SynthDataset):
             shape = segmentation.shape
 
             synth_image, extras = self.generator.generate(shape, seeds, extras)
-            shape = [1, self.nchannels, *synth_image.shape[-3:]]
+            shape = [self.nchannels, *synth_image.shape[-3:]]
 
             data = {
                 "image": synth_image.view(shape),
-                "label": extras["nearest"][0].view(shape),
                 "gt": extras["linear"][0].view(shape),
-                "name": self.subjects[idx],
             }
-            # fill nans with zeros
-            data = self.filler(data)
-            data = self.scaler(data)
-            data["label"] = data["label"].long()
+
+            data = self.scale_data(data)
 
             samples = []
             for samp in range(self.nchannels):
                 sample_dict = {
-                    "image_def": extras["linear"][0][None, samp],
-                    "input": synth_image[None, samp],
+                    "input": data["image"][None, samp],
                 }
                 samples.append(sample_dict)
 
             device = synth_image.device
             subjects = {
                 "name": self.subjects[idx],
-                "image": torch.tensor(image.get_fdata(), device=device).view(
-                    1, *shape[-3:]
-                ),
+                "image": data["gt"][None, 0],
+                "seg": extras["nearest"][0].view(shape)[None, 0].long(),
                 "aff": affine,
                 "shp": torch.tensor(segmentation.shape).to(device),
             }

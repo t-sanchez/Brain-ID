@@ -18,6 +18,11 @@ backbone_options = {
 
 def build_backbone(args):
 
-    backbone = backbone_options[args.backbone](args.in_channels, args.f_maps)    
+    backbone = backbone_options[args.backbone](
+        args.in_channels,
+        args.f_maps,
+        args.layer_order,
+        args.num_groups,
+        args.num_levels,
+    )
     return backbone
-
