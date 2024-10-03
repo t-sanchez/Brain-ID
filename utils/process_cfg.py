@@ -13,7 +13,7 @@ def update_config(cfg, exp_name="", job_name=""):
     Args:
         cfg: <Config> from submit_config.config
     """
-    tz_NY = pytz.timezone("America/New_York")
+    tz_CH = pytz.timezone("Europe/Zurich")
 
     cfg.vis_itr = int(cfg.vis_itr / cfg.num_gpus)
 
@@ -23,14 +23,14 @@ def update_config(cfg, exp_name="", job_name=""):
             "Test",
             exp_name,
             job_name,
-            datetime.now(tz_NY).strftime("%m%d-%H%M"),
+            datetime.now(tz_CH).strftime("%m%d-%H%M"),
         )
     else:
         cfg.out_dir = os.path.join(
             cfg.out_dir,
             exp_name,
             job_name,
-            datetime.now(tz_NY).strftime("%m%d-%H%M"),
+            datetime.now(tz_CH).strftime("%m%d-%H%M"),
         )
     return cfg
 
