@@ -1,0 +1,58 @@
+defaults:
+  - fetalsynthgen/test_brainID
+  - default_train
+  - default_dataset
+  - default_val
+  - _self_
+
+## job specific set ups ##
+job_name: train-qc
+exp_name: qc
+ 
+device: "cuda:0"
+device_generator: #cuda:1
+
+
+dataset: Fetal
+modality: T2
+train_subset: #0.05
+train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
+# Dataset processing
+target_key: qcglobal
+transform_target: soft_binarize
+target_threshold: 1.0
+
+dataset_name: {'train': 'real_dataset', 'test': 'real_dataset'}
+task: qc # choices: feature training: { feat-anat, feat-seg, feat-anat-seg }, downstream task training: { seg, sr, reg, bf }
+task_f_maps: [32, 16, 8 ]
+fc_maps_list: [1024, 512]
+in_shape: [1, 160, 160, 160]
+out_feat_level: -1
+pool_kernel_stride: 4
+n_classes: 2
+
+eval_only: False 
+debug: False 
+freeze_feat: False
+
+resume: False
+resume_optim: True
+reset_epoch: False
+ckp_path: 
+feat_ext_ckp_path: /home/tsanchez/Documents/mial/repositories/Brain-ID/outs/BrainID/feat-anat/anat-uncertainty/1003-1014/ckp/checkpoint_latest.pth
+model_ckp_path: /home/tsanchez/Documents/mial/repositories/Brain-ID/outs/BrainID/qc/train-qc/1204-1114/ckp/checkpoint_latest.pth
+
+lr_drops: [250,300]
+
+batch_size: 2
+
+log_itr: 100
+vis_itr: 10000
+
+all_samples: 1
+
+train_patch: False
+patch_size: 96
+patch_boundary: 0
+patch_per_subject: 6
+seed: 42

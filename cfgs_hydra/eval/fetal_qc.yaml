@@ -1,12 +1,12 @@
 ## job specific set ups ##
-job_name: anat-uncertainty
-exp_name: feat-anat
+job_name: fetal-qc
+exp_name: fetal-qc
 #init_method: "tcp://localhost:9992"
 
 device_generator:
 
-task: feat-anat
-dataset_name: {'train': 'synth_id', 'test': 'real_dataset'}
+task: qc
+dataset_name: {'train': 'real_dataset', 'test': 'real_dataset'}
 
 eval_only: False 
 debug: False 
@@ -22,9 +22,9 @@ train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/confi
 batch_size: 1
 
 #mild_samples: 2
-all_samples: 4
+all_samples: 1
 
-train_patch: True
+train_patch: False
 patch_size: 96
 patch_boundary: 0
 patch_per_subject: 6

@@ -1,0 +1,19 @@
+train_augm:
+  _target_: monai.transforms.Compose
+  transforms:
+    - _target_: monai.transforms.RandFlipd
+      keys: ['image']
+      prob: 0.5
+    - _target_: monai.transforms.RandAffined
+      keys: ['image']
+      prob: 0.3
+      shear_range: [0.3, 0.3]
+      padding_mode: 'zeros'
+      mode: ['bilinear']
+    - _target_: monai.transforms.Rand3DElasticd
+      keys: ['image']
+      prob: 0.3
+      sigma_range: [5,7]
+      magnitude_range: [50, 150]
+      padding_mode: 'zeros'
+      mode: ['bilinear']

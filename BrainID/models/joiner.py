@@ -61,49 +61,77 @@ class BFProcessor(nn.Module):
 ##############################################################################
 
 
-class MultiInputIndepJoiner(nn.Module):
-    """
-    Perform forward pass separately on each augmented input.
-    """
-
-    def __init__(self, backbone, head):
-        super(MultiInputIndepJoiner, self).__init__()
+class MultiJoiner(nn.Module):
+    def __init__(self, backbone, head, freeze_feat=False):
+        super(MultiJoiner, self).__init__()
 
         self.backbone = backbone
         self.head = head
+        self.freeze_feat = freeze_feat
+
+    def format_head_input(self, feat, x):
+        out = self.pick_head_input(feat, x)
+        if not isinstance(out[0], list):
+            # Need the first head input to be feat, a list of tensors.
+            # As the head input will be unpacked in the head, we need to wrap it in a list.
+            out = [out]
+        return out
+
+    def pick_head_input(self, feat, x):
+        raise NotImplementedError
 
     def forward(self, input_list):
         outs = []
 
         for x in input_list:
-            feat = self.backbone.get_feature(x["input"])
+            if self.freeze_feat:
+                with torch.no_grad():
+                    feat = self.backbone.get_feature(x["input"])
+            else:
+                feat = self.backbone.get_feature(x["input"])
             out = {"feat": feat}
             if self.head is not None:
-                out.update(self.head(feat))
+
+                head_input = self.format_head_input(feat, x)
+                out.update(self.head(*head_input))
             outs.append(out)
         return outs, [input["input"] for input in input_list]
 
+    def train(self):
+        self.backbone.train()
+        if self.head is not None:
+            self.head.train()
 
-class MultiInputDepJoiner(nn.Module):
+    def eval(self):
+        self.backbone.eval()
+        if self.head is not None:
+            self.head.eval()
+
+
+class MultiInputIndepJoiner(MultiJoiner):
     """
     Perform forward pass separately on each augmented input.
     """
 
-    def __init__(self, backbone, head):
-        super(MultiInputDepJoiner, self).__init__()
+    def __init__(self, backbone, head, freeze_feat=False):
+        super(MultiInputIndepJoiner, self).__init__(
+            backbone, head, freeze_feat
+        )
 
-        self.backbone = backbone
-        self.head = head
+    def pick_head_input(self, feat, x):
+        return feat
 
-    def forward(self, input_list):
-        outs = []
-        for x in input_list:
-            feat = self.backbone.get_feature(x["input"])
-            out = {"feat": feat}
-            if self.head is not None:
-                out.update(self.head(feat, x["input"]))
-            outs.append(out)
-        return outs, [input["input"] for input in input_list]
+
+class MultiInputDepJoiner(MultiJoiner):
+    """
+    Perform forward pass separately on each augmented input.
+    """
+
+    def __init__(self, backbone, head, freeze_feat=False):
+        super(MultiInputDepJoiner, self).__init__(backbone, head, freeze_feat)
+
+    def pick_head_input(self, feat, x):
+        return feat, x["input"]
 
 
 ################################
@@ -122,8 +150,8 @@ def get_processors(args, task, device):
     return processors
 
 
-def get_joiner(task, backbone, head):
-    if "sr" in task or "bf" in task:
-        return MultiInputDepJoiner(backbone, head)
+def get_joiner(task, backbone, head, freeze_feat=False):
+    if "sr" in task or "bf" in task or "qc" in task:
+        return MultiInputDepJoiner(backbone, head, freeze_feat)
     else:
-        return MultiInputIndepJoiner(backbone, head)
+        return MultiInputIndepJoiner(backbone, head, freeze_feat)

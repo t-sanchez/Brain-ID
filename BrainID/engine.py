@@ -11,6 +11,8 @@ import torch
 import utils.misc as utils
 import utils.logging as logging
 import pdb
+from utils.misc import PredictionLoggerQC, log_step
+
 
 logger = logging.get_logger(__name__)
 
@@ -243,6 +245,7 @@ def train_one_epoch_feature(
             **loss_dict_reduced_scaled,
             **loss_dict_reduced_unscaled,
         )
+
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(wd=optimizer.param_groups[0]["weight_decay"])
 
@@ -289,8 +292,7 @@ def train_one_epoch_feature(
 def train_one_epoch_downstream(
     epoch,
     args,
-    feat_extractor,
-    model,
+    model_joined,
     processors,
     criterion,
     data_loader,
@@ -303,10 +305,12 @@ def train_one_epoch_downstream(
     postprocessor=None,
     visualizers=None,
     output_dir=None,
+    logger=None,
     device="cpu",
+    log_csv=None,
 ):
 
-    model.train()
+    model_joined.head.train()
     criterion.train()
 
     metric_logger = utils.MetricLogger(
@@ -317,6 +321,7 @@ def train_one_epoch_downstream(
     )
 
     header = "Epoch: [{}/{}]".format(epoch, args.n_epochs)
+    step_logger = PredictionLoggerQC()
 
     for itr, (subjects, samples) in enumerate(
         metric_logger.log_every(
@@ -328,7 +333,7 @@ def train_one_epoch_downstream(
             train_limit=args.train_itr_limit,
         )
     ):
-
+        itr_curr = itr
         # update weight decay and learning rate according to their schedule
         itr = len(data_loader) * epoch + itr  # global training iteration
         for i, param_group in enumerate(optimizer.param_groups):
@@ -342,14 +347,7 @@ def train_one_epoch_downstream(
         samples = utils.nested_dict_to_device(samples, device)
         subjects = utils.nested_dict_to_device(subjects, device)
 
-        # forward
-        if args.freeze_feat:
-            with torch.no_grad():
-                feats, inputs = feat_extractor(samples)
-        else:
-            feats, inputs = feat_extractor(samples)
-
-        outputs = model([feat["feat"] for feat in feats], inputs)
+        outputs, _ = model_joined(samples)
         for processor in processors:
             outputs = processor(outputs, samples)
 
@@ -381,8 +379,12 @@ def train_one_epoch_downstream(
 
         losses.backward()
         if args.clip_max_norm > 0:
-            utils.clip_gradients(model, args.clip_max_norm)
-        utils.cancel_gradients_last_layer(epoch, model, args.freeze_last_layer)
+            utils.clip_gradients(model_joined.head, args.clip_max_norm)
+        utils.cancel_gradients_last_layer(
+            epoch, model_joined.head, args.freeze_last_layer
+        )
+
+        import pdb
 
         optimizer.step()
         optimizer.zero_grad()
@@ -407,6 +409,18 @@ def train_one_epoch_downstream(
                 wd_feat=feat_optimizer.param_groups[0]["weight_decay"]
             )
 
+        step_logger.update(
+            pred=outputs[0]["scalar"].detach(),
+            name=subjects["name"],
+            target=subjects["target"],
+            target_binary=subjects["target_binary"],
+            qcglobal=subjects["qcglobal"],
+            lr=optimizer.param_groups[0]["lr"],
+            wd=optimizer.param_groups[0]["weight_decay"],
+            loss=loss_value,
+            loss_ce=loss_dict["loss_ce"].detach().item(),
+        )
+
         if (
             args.debug
             or (itr % args.vis_itr == 0)
@@ -420,28 +434,83 @@ def train_one_epoch_downstream(
             )
 
             if postprocessor is not None:
-                outputs = postprocessor(args, outputs, feats, task=args.task)
+                outputs = postprocessor(args, outputs, outputs, task=args.task)
             if args.visualizer.make_results:
                 make_results(subjects, samples, outputs, out_dir=epoch_vis_dir)
 
-            visualizers["result"].visualize_all(
-                subjects,
-                samples,
-                outputs,
-                epoch_vis_dir,
-                output_names=args.output_names + args.aux_output_names,
-                target_names=args.target_names,
-            )
-            if "feature" in visualizers:
-                visualizers["feature"].visualize_all_multi(
-                    subjects, samples, outputs, epoch_vis_dir
+            # visualizers["result"].visualize_all(
+            #     subjects,
+            #     samples,
+            #     outputs,
+            #     epoch_vis_dir,
+            #     output_names=args.output_names + args.aux_output_names,
+            #     target_names=args.target_names,
+            # )
+            # if "feature" in visualizers:
+            #     visualizers["feature"].visualize_all_multi(
+            #         subjects, samples, outputs, epoch_vis_dir
+            #     )
+        # if itr_curr > 10:
+        #    break
+        if itr_curr in [0, 3, 4]:
+            import nibabel as nib
+
+            im = samples[0]["input"]
+            im = im.detach().squeeze().cpu().numpy()
+            for k in range(2):
+                nib.save(
+                    nib.Nifti1Image(im[k], affine=None),
+                    f"im_{epoch}_{itr_curr}_{k}.nii.gz",
                 )
+
+    if logger is not None:
+        log_step(step_logger, logger, epoch, step="train", log_csv=log_csv)
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    logger.info("Averaged stats: {}".format(metric_logger))
+    # logger.info("Averaged stats: {}".format(metric_logger))
 
     if args.debug:
         exit()
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+def eval_model(
+    args,
+    model_joined,
+    processors,
+    criterion,
+    dataloader,
+    epoch,
+    logger=None,
+    step="train",
+    device="cpu",
+    log_csv=None,
+):
+
+    step_logger = PredictionLoggerQC()
+    for itr, (subjects, samples) in enumerate(dataloader):
+
+        samples = utils.nested_dict_to_device(samples, device)
+        subjects = utils.nested_dict_to_device(subjects, device)
+        # feats, inputs = feat_extractor(samples)
+        # outputs = model([feat["feat"] for feat in feats], inputs)
+        outputs, _ = model_joined(samples)
+        for processor in processors:
+            outputs = processor(outputs, samples)
+        # loss_dict = criterion(outputs, subjects, samples)
+        # import pdb
+
+        # pdb.set_trace()
+        step_logger.update(
+            pred=outputs[0]["scalar"],
+            name=subjects["name"],
+            target=subjects["target"],
+            target_binary=subjects["target_binary"],
+            qcglobal=subjects["qcglobal"],
+        )
+        # if itr > 10:
+        #    break
+    if logger is not None:
+        log_step(step_logger, logger, epoch, step=step, log_csv=log_csv)

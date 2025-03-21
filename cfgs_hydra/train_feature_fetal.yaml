@@ -1,9 +1,19 @@
+defaults:
+  - fetalsynthgen/dhcp_onlinesynth
+  - default_train
+  - default_dataset
+  - default_val
+  #- submit
+  - _self_
+  
 ## job specific set ups ##
 job_name: anat-uncertainty
 exp_name: feat-anat
 #init_method: "tcp://localhost:9992"
 
+device: "cuda:0"
 device_generator:
+num_workers: 1
 
 task: feat-anat
 dataset_name: {'train': 'synth_id', 'test': 'real_dataset'}
@@ -15,7 +25,7 @@ resume: False
 reset_epoch: False 
 resume_optim: True
 ckp_path: 
-train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
+#train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 
 #lr_drops: [70,85]
 

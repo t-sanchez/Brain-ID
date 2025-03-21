@@ -1,0 +1,14 @@
+
+## dataset choices
+# options: {synth, synth_id, synth_id_deform, synth_id_paired} 
+dataset_name: {'train': 'synth_id', 'test': 'synth_id'}
+
+## training dataset set up (synth for synthetic pre-training)
+# ADNI     ADNI3     ADHD200       AIBL        HCP    OASIS3
+#  T1     T1,FLAIR      T1     T1,T2,FLAIR    T1,T2     CT  
+dataset: synth 
+modality: T2
+
+
+  
+

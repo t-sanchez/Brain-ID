@@ -1,7 +1,8 @@
 import datetime
 import os, sys
+import pdb
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import glob
 import yaml
 import json
@@ -21,48 +22,23 @@ import utils.logging as logging
 import utils.misc as utils
 
 from BrainID.visualizer import TaskVisualizer, FeatVisualizer
-from BrainID.datasets import build_dataset_single
+from BrainID.datasets import build_fetal_dataset
 from BrainID.models import build_feat_model, build_optimizer, build_schedulers
 from BrainID.engine import train_one_epoch_feature
+import pdb
 
+from BrainID.datasets.fetal_id_synth import (
+    RandomBlockPatchFetalDataset,
+    BlockRandomSampler,
+)
+from hydra import compose, initialize
+from hydra.utils import instantiate
+from omegaconf import OmegaConf
 
 logger = logging.get_logger(__name__)
 
 
-# default & gpu cfg #
-default_cfg_file = "cfgs/default_train.yaml"
-default_data_file = "cfgs/default_dataset.yaml"
-default_val_file = "cfgs/default_val.yaml"
-submit_cfg_file = "cfgs/submit.yaml"
-
-cfg_dir = "cfgs/train"
-
-
-def get_params_groups(model):
-    all = []
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            continue
-        # we do not regularize biases nor Norm parameters
-        all.append(param)
-    return [{"params": all}]
-
-
 def train(args: Namespace) -> None:
-
-    utils.init_distributed_mode(args)
-    if torch.cuda.is_available():
-        if args.num_gpus > torch.cuda.device_count():
-            args.num_gpus = torch.cuda.device_count()
-        assert (
-            args.num_gpus <= torch.cuda.device_count()
-        ), "Cannot use more GPU devices than available"
-    else:
-        args.num_gpus = 0
-
-    if args.debug:
-        args.num_workers = 0
-
     output_dir = utils.make_dir(args.out_dir)
     yaml.dump(
         vars(args), open(output_dir / "config.yaml", "w"), allow_unicode=True
@@ -80,7 +56,6 @@ def train(args: Namespace) -> None:
             "%s: %s" % (k, str(v)) for k, v in sorted(dict(vars(args)).items())
         )
     )
-
     if args.device is not None:  # assign to specified device
         device = args.device
     elif torch.cuda.is_available():
@@ -102,19 +77,29 @@ def train(args: Namespace) -> None:
     torch.backends.cudnn.deterministic = True
 
     # ============ preparing data ... ============
-    dataset_train = build_dataset_single(
-        vars(args.dataset_name)["train"],
-        split="train",
-        args=args,
-        device=(
-            args.device_generator
-            if args.device_generator is not None
-            else device
-        ),
+    base_module = instantiate(args.fetalsynthgen.__dict__)
+    dataset_train = build_fetal_dataset(
+        dm=base_module,
+        dataset_name=args.dataset_name,
+        train=True,
+        device=device,
+        # config_dir=args.train_fetal_cfg,
+        # config_name="dhcp_onlinesynth",
+        # dataset_name=args.dataset_name,
     )
 
-    if args.num_gpus > 1:
-        sampler_train = utils.DistributedWeightedSampler(dataset_train)
+    if args.train_patch:
+        dataset_train = RandomBlockPatchFetalDataset(
+            dataset=dataset_train,
+            patch_size=args.patch_size,
+            boundary=args.patch_boundary,
+            patch_per_subject=args.patch_per_subject,
+        )
+
+    if args.train_patch:
+        sampler_train = BlockRandomSampler(
+            dataset_train, args.patch_per_subject
+        )
     else:
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
@@ -127,36 +112,28 @@ def train(args: Namespace) -> None:
         batch_sampler=batch_sampler,
         # collate_fn=utils.collate_fn, # apply custom data cooker if needed
         num_workers=args.num_workers,
+        multiprocessing_context="spawn" if args.num_workers > 0 else None,
+        persistent_workers=True if args.num_workers > 0 else False,
     )
-
     visualizers = {"result": TaskVisualizer(args)}
     if args.visualizer.feat_vis:
         visualizers["feature"] = FeatVisualizer(args)
 
     # ============ building model ... ============
+
     args, model, processors, criterion, postprocessor = build_feat_model(
         args, device=device
     )  # train: True; test: False
 
     model_without_ddp = model
     # Use multi-process data parallel model in the multi-gpu setting
-    if args.num_gpus > 1:
-        logger.info("currect device: %s" % str(torch.cuda.current_device()))
-        # Make model replica operate on the current device
-        model = torch.nn.parallel.DistributedDataParallel(
-            module=model,
-            device_ids=[device],
-            output_device=device,
-            find_unused_parameters=True,
-        )
-        model_without_ddp = model.module  # unwarp the model
     n_parameters = sum(
         p.numel() for p in model.parameters() if p.requires_grad
     )
     logger.info("Num of trainable model params: {}".format(n_parameters))
 
     # ============ preparing optimizer ... ============
-    param_dicts = get_params_groups(model_without_ddp)
+    param_dicts = utils.get_params_groups(model_without_ddp)
     optimizer = build_optimizer(args, param_dicts)
 
     # ============ init schedulers ... ============
@@ -197,26 +174,52 @@ def train(args: Namespace) -> None:
 
         checkpoint_paths = [ckp_output_dir / "checkpoint_latest.pth"]
 
-        # ============ save model ... ============
-        checkpoint_paths.append(
-            ckp_epoch_dir / f"checkpoint_epoch_{epoch}.pth"
-        )
-
-        for checkpoint_path in checkpoint_paths:
-            utils.save_on_master(
-                {
-                    "model": model_without_ddp.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "epoch": epoch,
-                    "args": args,
-                    "best_val_stats": best_val_stats,
-                },
-                checkpoint_path,
+        if epoch % 25 == 0:
+            # ============ save model ... ============
+            checkpoint_paths.append(
+                ckp_epoch_dir / f"checkpoint_epoch_{epoch}.pth"
             )
 
+            for checkpoint_path in checkpoint_paths:
+                utils.save_on_master(
+                    {
+                        "model": model_without_ddp.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "epoch": epoch,
+                        "args": args,
+                        "best_val_stats": best_val_stats,
+                    },
+                    checkpoint_path,
+                )
+
+        # for itr, (subjects, samples) in enumerate(data_loader_train):
+        #     if itr > 40:
+        #         break
+        #     with torch.no_grad():
+        #         samples = utils.nested_dict_to_device(samples, device)
+        #         subjects = utils.nested_dict_to_device(subjects, device)
+
+        #         outputs, _ = model(samples)
+        #         for processor in processors:
+        #             outputs = processor(outputs, samples)
+
+        #         epoch_vis_dir = (
+        #             utils.make_dir(os.path.join(output_dir, "vis-train"))
+        #             if epoch is not None
+        #             else output_dir
+        #         )
+        #         visualizers["result"].visualize_all(
+        #             subjects,
+        #             samples,
+        #             outputs,
+        #             epoch_vis_dir,
+        #             output_names=args.output_names + args.aux_output_names,
+        #             target_names=args.target_names,
+        #             suffix=f"_{itr}",
+        #         )
+        # pdb.set_trace()
         # ============ training one epoch ... ============
-        if args.num_gpus > 1:
-            sampler_train.set_epoch(epoch)
+
         log_stats = train_one_epoch_feature(
             epoch,
             args,
@@ -245,16 +248,11 @@ def train(args: Namespace) -> None:
 
 
 #####################################################################################
-
 if __name__ == "__main__":
-    args = utils.preprocess_cfg(
-        [
-            default_cfg_file,
-            default_data_file,
-            default_val_file,
-            submit_cfg_file,
-            sys.argv[1],
-        ],
-        cfg_dir=cfg_dir,
-    )
-    utils.launch_job(args, train)
+
+    with initialize(version_base=None, config_path="../cfgs_hydra"):
+        cfg = compose(
+            config_name=sys.argv[1],
+        )
+    args = utils.dictconfig_to_namespace(cfg)
+    train(args)

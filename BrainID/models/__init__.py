@@ -72,7 +72,6 @@ def process_args(args, task="feat"):
     """
     task options: feat-anat, feat-seg, seg, reg, sr, bf
     """
-
     args.out_channels = {}
     args.output_names = []
     args.aux_output_names = []
@@ -104,7 +103,10 @@ def process_args(args, task="feat"):
             args.out_channels["seg"] = args.n_labels_with_csf
             args.output_names += ["label"]
             args.target_names += ["label"]
-
+        if "qc" in task:
+            args.out_channels["scalar"] = 1
+            args.output_names += ["scalar"]
+            args.target_names += ["scalar"]
         assert len(args.output_names) > 0
 
     return args
@@ -154,6 +156,16 @@ def get_criterion(args, task, device):
     """
     loss_names = []
     weight_dict = {}
+    if "qc" in task:
+        # scalar_loss
+        loss_names += ["ce"]
+        weight_dict["loss_ce"] = args.weights.qc_ce
+        return SetScalarCriterion(
+            args=args,
+            weight_dict=weight_dict,
+            loss_names=loss_names,
+            device=device,
+        )
 
     if "contrastive" in task:
         loss_names += ["contrastive"]
@@ -297,13 +309,21 @@ def build_feat_model(args, device="cpu"):
     return args, model, processors, criterion, postprocessor
 
 
+import pdb
+
+
 def build_downstream_model(args, device="cpu"):
     args = process_args(args, task=args.task)
 
     backbone = build_backbone(args)
 
     feat_model = get_joiner(args.task, backbone, None)
-    task_model = get_head(args, args.task_f_maps, args.out_channels, True, -1)
+    task_model = get_head(
+        args, args.task_f_maps, args.out_channels, True, args.out_feat_level
+    )
+    model_joined = get_joiner(
+        args.task, backbone, task_model, freeze_feat=args.freeze_feat
+    )
 
     processors = get_processors(args, args.task, device)
 
@@ -312,6 +332,15 @@ def build_downstream_model(args, device="cpu"):
 
     feat_model.to(device)
     task_model.to(device)
+    model_joined.to(device)
     postprocessor = get_postprocessor
 
-    return args, feat_model, task_model, processors, criterion, postprocessor
+    return (
+        args,
+        feat_model,
+        task_model,
+        processors,
+        criterion,
+        postprocessor,
+        model_joined,
+    )

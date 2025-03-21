@@ -1,0 +1,33 @@
+# link augmentations from augmentations yaml
+defaults:
+  - _self_
+  #- augmentations_online
+  - dhcp_brainID
+_target_: fetalsynthgen.dataloader.FetalDataModule
+
+# type of images and splits to use for training and validation
+train: synth # synth real
+validate: real+synth # synth real real+synth
+test: real
+# split of the data to use for training and validation
+# defines in splits.csv ['Splits'] column
+train_splits: ["train"]
+valid_splits: ["val"]
+test_splits: []
+# path to the datasets tha should countain bids style folders with images
+
+
+segm_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled1p1 #/media/tsanchez/tsanchez_data/data/various/merged_feta_spinabifida/derivatives/resampled05
+seed_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/seeds1p1 #/media/tsanchez/tsanchez_data/data/various/merged_feta_spinabifida/derivatives/seeds
+real_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled1p1 #/media/tsanchez/tsanchez_data/data/various/merged_feta_spinabifida/derivatives/resampled05
+synth_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled1p1  #/media/tsanchez/tsanchez_data/data/various/merged_feta_spinabifida/derivatives/resampled05
+split_file: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled1p1/splits.csv 
+#/home/tsanchez/Documents/mial/repositories/FetalSynthSeg/data/feta_splits.csv # used for training purposes to define subjects belonging to each split
+rescale_res: 1.0
+batch_size: 1
+num_workers: 1
+pin_memory: False
+synth_val_size: 100
+device: cuda
+device_gen: cuda
+

@@ -337,7 +337,8 @@ class TaskVisualizer(BaseVisualizer):
         target_names=["image"],
         suffix="",
     ):
-
+        if suffix != "":
+            suffix = "_" + suffix if suffix[0] != "_" else suffix
         if len(output_names) == 0:
             return
 
@@ -348,8 +349,6 @@ class TaskVisualizer(BaseVisualizer):
         inputs = [
             x[input_name].data.cpu().numpy() for x in samples
         ]  # n_samples * (b, d, s, r, c)
-        import pdb
-        import nibabel as nib
 
         Idefs = None
         if "image_def" in samples[0].keys():
@@ -363,8 +362,7 @@ class TaskVisualizer(BaseVisualizer):
                 ]  # n_samples * (b, d, s, r, c)
 
         for i, name in enumerate(names):
-            case_out_dir = make_dir(out_dir)
-            case_out_dir2 = make_dir(os.path.join(out_dir, "nifti"))
+            case_out_dir = make_dir(os.path.join(out_dir, name))
             curr_inputs = [
                 self.prepare_for_itk(
                     inputs[i_sample][i].transpose((3, 2, 1, 0))
@@ -374,23 +372,6 @@ class TaskVisualizer(BaseVisualizer):
             self.visualize_sample(
                 name, curr_inputs, case_out_dir, postfix="_%s" % input_name
             )
-
-            for i, input in enumerate(samples):
-                im = nib.Nifti1Image(
-                    input[input_name].data.cpu().numpy().squeeze(), np.eye(4)
-                )
-                nib.save(
-                    im, f"{case_out_dir2}/{name}_input_{i}{suffix}.nii.gz"
-                )
-
-            im = nib.Nifti1Image(
-                subjects["image"].data.cpu().numpy().squeeze(), np.eye(4)
-            )
-
-            nib.save(im, f"{case_out_dir2}/{name}_gt{suffix}.nii.gz")
-            # Save as json subjects["metadata"]
-
-            return
             if Idefs is not None:
                 curr_Idef = [
                     self.prepare_for_itk(
@@ -398,7 +379,6 @@ class TaskVisualizer(BaseVisualizer):
                     )
                     for i_sample in range(n_samples)
                 ]  # n_samples * (d, x, y, z) -> n_samples (z, y, x, d)
-
             if len(out_images) > 0:
                 curr_target = {}
                 if not self.subject_robust:
@@ -448,7 +428,6 @@ class TaskVisualizer(BaseVisualizer):
                     ]  # n_samples * (d, x, y, z) -> n_samples (z, y, x, d)
 
                 all_images = []
-
                 for i_sample, curr_input in enumerate(curr_inputs):
                     target_list = [curr_input]
                     for target_name in target_names:
@@ -477,7 +456,9 @@ class TaskVisualizer(BaseVisualizer):
                     np.uint8
                 )  # (row, n_sample * col)
                 Image.fromarray(all_images).save(
-                    os.path.join(case_out_dir, name + "_all_outputs.png")
+                    os.path.join(
+                        case_out_dir, name + f"_all_outputs{suffix}.png"
+                    )
                 )
 
     def visualize_sample(self, name, input, out_dir, postfix="_input"):

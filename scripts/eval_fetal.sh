@@ -1,23 +1,24 @@
 #!/bin/bash
 
-#SBATCH --job-name=train_brain-id
+#SBATCH --job-name=eval_brain-id
 #SBATCH --gpus=1
-#SBATCH --partition=  
+#SBATCH --partition=
 
 #SBATCH --mail-type=FAIL
-#SBATCH --account= 
+#SBATCH --account=
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=256G # 256G
+#SBATCH --cpus-per-task=4	# 24
+#SBATCH --mem=32G # 256G
 #SBATCH --time=6-23:59:59
 #SBATCH --output=logs/%j.log # Standard output and error log 
 
 
 # exp-specific cfg #
-exp_cfg_file=cfgs/train/anat_fetal.yaml
+exp_cfg_file='cfgs/eval/fetal_qc.yaml'
 
 
 date;hostname;pwd
-python scripts/train_fetal.py $exp_cfg_file 
+python scripts/eval.py $exp_cfg_file 
 date
+

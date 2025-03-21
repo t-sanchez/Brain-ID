@@ -1,0 +1,37 @@
+# link augmentations from augmentations yaml
+defaults:
+  - _self_
+  - dhcp_brainID
+  - qc_augmentations
+_target_: fetalsynthgen.dataloader.FetalDataModule
+
+# type of images and splits to use for training and validation
+train: real # synth real
+validate: real # synth real real+synth
+test: real
+# split of the data to use for training and validation
+# defines in splits.csv ['Splits'] column
+train_splits: ["train"]
+valid_splits: ["val"]
+test_splits: []
+# path to the datasets tha should countain bids style folders with images
+
+
+segm_path:  
+seed_path:
+real_path: "/media/tsanchez/tsanchez_data/data/various/bidsified_srr"
+synth_path: 
+split_file: "/media/tsanchez/tsanchez_data/data/various/bidsified_srr/splits.csv"
+
+rescale_res: 1.0
+batch_size: 1
+num_workers: 1
+pin_memory: False
+synth_val_size: 100
+device: cuda
+device_gen: cuda
+
+
+
+
+

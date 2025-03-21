@@ -12,6 +12,59 @@ from BrainID.models.losses import GradientLoss, gaussian_loss, laplace_loss
 uncertainty_loss = {"gaussian": gaussian_loss, "laplace": laplace_loss}
 
 
+class SetScalarCriterion(nn.Module):
+
+    def __init__(self, args, weight_dict, loss_names, device):
+        super(SetScalarCriterion, self).__init__()
+        self.args = args
+        self.weight_dict = weight_dict
+        self.loss_names = loss_names
+
+        self.loss_map = {}
+        self.ce = nn.CrossEntropyLoss(
+            weight=torch.tensor(args.losses.loss_weights_ce)
+        )
+        self.l1 = nn.L1Loss()
+        self.l2 = nn.MSELoss()
+        if args.losses.loss_regression:
+            self.loss_map["l1"] = self.loss_l1
+            self.loss_map["l2"] = self.loss_l2
+        else:
+            self.loss_map["ce"] = self.loss_ce
+        self.device = device
+
+    def loss_ce(self, outputs, targets, *kwargs):
+        loss_ce = self.ce(outputs["scalar"], targets["target"].to(self.device))
+        return {"loss_ce": loss_ce}
+
+    def loss_l1(self, outputs, targets, *kwargs):
+        loss_l1 = self.l1(outputs["scalar"], targets["target"].to(self.device))
+        return {"loss_l1": loss_l1}
+
+    def loss_l2(self, outputs, targets, *kwargs):
+        loss_l2 = self.l2(outputs["scalar"], targets["target"].to(self.device))
+        return {"loss_l2": loss_l2}
+
+    def get_loss(self, loss_name, outputs_list, targets, samples_list):
+        assert (
+            loss_name in self.loss_map
+        ), f"do you really want to compute {loss_name} loss?"
+        total_loss = 0.0
+        for i_sample, outputs in enumerate(outputs_list):
+            total_loss += self.loss_map[loss_name](
+                outputs, targets, samples_list[i_sample]
+            )["loss_" + loss_name]
+        return {"loss_" + loss_name: total_loss / len(outputs_list)}
+
+    def forward(self, outputs_list, targets, *kwargs):
+        losses = {}
+        for loss_name in self.loss_names:
+            losses.update(
+                self.get_loss(loss_name, outputs_list, targets, *kwargs)
+            )
+        return losses
+
+
 class SetCriterion(nn.Module):
     """
     This class computes the loss for BrainID.

@@ -7,32 +7,28 @@ from datetime import datetime
 from utils.config import Config
 
 
-def update_config(cfg, exp_name="", job_name=""):
+def build_out_dir(cfg, exp_name="", job_name=""):
     """
-    Update some configs.
-    Args:
-        cfg: <Config> from submit_config.config
+    Construct the output directory based on the config
     """
     tz_CH = pytz.timezone("Europe/Zurich")
 
-    cfg.vis_itr = int(cfg.vis_itr / cfg.num_gpus)
-
     if cfg.eval_only:
-        cfg.out_dir = os.path.join(
+        out_dir = os.path.join(
             cfg.out_dir,
             "Test",
-            exp_name,
-            job_name,
+            cfg.exp_name,
+            cfg.job_name,
             datetime.now(tz_CH).strftime("%m%d-%H%M"),
         )
     else:
-        cfg.out_dir = os.path.join(
+        out_dir = os.path.join(
             cfg.out_dir,
-            exp_name,
-            job_name,
+            cfg.exp_name,
+            cfg.job_name,
             datetime.now(tz_CH).strftime("%m%d-%H%M"),
         )
-    return cfg
+    return out_dir
 
 
 def merge_and_update_from_dict(cfg, dct):
@@ -57,18 +53,18 @@ def merge_and_update_from_dict(cfg, dct):
     return cfg
 
 
-def load_config(default_cfg_file, add_cfg_files=[], cfg_dir=""):
-    cfg = Config(default_cfg_file)
+# def load_config(default_cfg_file, add_cfg_files=[], cfg_dir=""):
+#     cfg = Config(default_cfg_file)
 
-    for cfg_file in add_cfg_files:
-        if os.path.isabs(cfg_file):
-            add_cfg = Config(cfg_file)
-        else:
-            # assert os.path.isabs(cfg_dir)
-            if not cfg_file.endswith(".yaml"):
-                cfg_file += ".yaml"
-            add_cfg = Config(os.path.join(cfg_dir, cfg_file))
-        cfg = merge_and_update_from_dict(cfg, add_cfg)
-    return update_config(
-        cfg, exp_name=cfg["exp_name"], job_name=cfg["job_name"]
-    )
+#     for cfg_file in add_cfg_files:
+#         if os.path.isabs(cfg_file):
+#             add_cfg = Config(cfg_file)
+#         else:
+#             # assert os.path.isabs(cfg_dir)
+#             if not cfg_file.endswith(".yaml"):
+#                 cfg_file += ".yaml"
+#             add_cfg = Config(os.path.join(cfg_dir, cfg_file))
+#         cfg = merge_and_update_from_dict(cfg, add_cfg)
+#     return build_out_dir(
+#         cfg, exp_name=cfg["exp_name"], job_name=cfg["job_name"]
+#     )

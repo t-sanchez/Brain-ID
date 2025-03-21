@@ -3,11 +3,12 @@ Misc functions, including distributed helpers.
 
 Mostly copy-paste from torchvision references.
 """
+
 import os
 import math
 import time
 import datetime
-import pickle 
+import pickle
 import subprocess
 import warnings
 from argparse import Namespace
@@ -19,8 +20,9 @@ import SimpleITK as sitk
 
 import utils.logging as logging
 import utils.multiprocessing as mpu
-from utils.process_cfg import load_config
 
+# from utils.process_cfg import load_config
+from utils.process_cfg import build_out_dir
 from collections import defaultdict, deque
 
 
@@ -28,60 +30,102 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import torch.nn.functional as F
+
 # needed due to empty tensor bug in pytorch and torchvision 0.5
 import torchvision
 from torch import Tensor
 from visdom import Visdom
-
+from types import SimpleNamespace
+from omegaconf import DictConfig, ListConfig
 
 logger = logging.get_logger(__name__)
 
 
-'''if float(torchvision.__version__[:3]) < 0.7:
+def get_params_groups(model):
+    all = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        # we do not regularize biases nor Norm parameters
+        all.append(param)
+    return [{"params": all}]
+
+
+def dictconfig_to_namespace(cfg: DictConfig) -> SimpleNamespace:
+    """
+    Recursively converts a DictConfig to a SimpleNamespace.
+    """
+
+    def convert(value):
+        if isinstance(value, DictConfig):
+            return dictconfig_to_namespace(value)
+        elif isinstance(value, ListConfig):
+            return [convert(item) for item in value]
+        elif isinstance(value, list):  # Handle lists with nested DictConfigs
+            return [convert(item) for item in value]
+        return value
+
+    return SimpleNamespace(
+        **{key: convert(value) for key, value in cfg.items()}
+    )
+
+
+"""if float(torchvision.__version__[:3]) < 0.7:
     from torchvision.ops import _new_empty_tensor
-    from torchvision.ops.misc import _output_size'''
+    from torchvision.ops.misc import _output_size"""
 
 
-def make_dir(dir_name, parents = True, exist_ok = True): 
+def make_dir(dir_name, parents=True, exist_ok=True):
     dir_name = Path(dir_name)
-    dir_name.mkdir(parents=parents, exist_ok=exist_ok) 
+    dir_name.mkdir(parents=parents, exist_ok=exist_ok)
     return dir_name
 
 
-def read_image(img_path, save_path = None):
+def read_image(img_path, save_path=None):
     img = nib.load(img_path)
     nda = img.get_fdata()
     affine = img.affine
-    if save_path: 
-        ni_img = nib.Nifti1Image(nda, affine) 
+    if save_path:
+        ni_img = nib.Nifti1Image(nda, affine)
         nib.save(ni_img, save_path)
     return nda, affine
 
+
 def save_image(nda, affine, save_path):
-    ni_img = nib.Nifti1Image(nda, affine) 
+    ni_img = nib.Nifti1Image(nda, affine)
     nib.save(ni_img, save_path)
     return save_path
 
-def img2nda(img_path, save_path = None):
+
+def img2nda(img_path, save_path=None):
     img = sitk.ReadImage(img_path)
     nda = sitk.GetArrayFromImage(img)
     if save_path:
         np.save(save_path, nda)
     return nda, img.GetOrigin(), img.GetSpacing(), img.GetDirection()
 
-def to3d(img_path, save_path = None):
+
+def to3d(img_path, save_path=None):
     nda, o, s, d = img2nda(img_path)
     save_path = img_path if save_path is None else save_path
     if len(o) > 3:
         nda2img(nda, o[:3], s[:3], d[:3] + d[4:7] + d[8:11], save_path)
     return save_path
 
-def nda2img(nda, origin = None, spacing = None, direction = None, save_path = None, isVector = None):
+
+def nda2img(
+    nda,
+    origin=None,
+    spacing=None,
+    direction=None,
+    save_path=None,
+    isVector=None,
+):
     if type(nda) == torch.Tensor:
         nda = nda.cpu().detach().numpy()
-    nda = np.squeeze(np.array(nda)) 
+    nda = np.squeeze(np.array(nda))
     isVector = isVector if isVector else len(nda.shape) > 3
-    img = sitk.GetImageFromArray(nda, isVector = isVector)
+    img = sitk.GetImageFromArray(nda, isVector=isVector)
     if origin:
         img.SetOrigin(origin)
     if spacing:
@@ -91,18 +135,17 @@ def nda2img(nda, origin = None, spacing = None, direction = None, save_path = No
     if save_path:
         sitk.WriteImage(img, save_path)
     return img
-  
 
 
-def cropping(img_path, tol = 0, crop_range_lst = None, spare = 0, save_path = None):
+def cropping(img_path, tol=0, crop_range_lst=None, spare=0, save_path=None):
 
     img = sitk.ReadImage(img_path)
     orig_nda = sitk.GetArrayFromImage(img)
-    if len(orig_nda.shape) > 3: # 4D data: last axis (t=0) as time dimension
+    if len(orig_nda.shape) > 3:  # 4D data: last axis (t=0) as time dimension
         nda = orig_nda[..., 0]
     else:
         nda = np.copy(orig_nda)
-    
+
     if crop_range_lst is None:
         # Mask of non-black pixels (assuming image has a single channel).
         mask = nda > tol
@@ -110,7 +153,7 @@ def cropping(img_path, tol = 0, crop_range_lst = None, spare = 0, save_path = No
         coords = np.argwhere(mask)
         # Bounding box of non-black pixels.
         x0, y0, z0 = coords.min(axis=0)
-        x1, y1, z1 = coords.max(axis=0) + 1   # slices are exclusive at the top
+        x1, y1, z1 = coords.max(axis=0) + 1  # slices are exclusive at the top
         # add sparing gap if needed
         x0 = x0 - spare if x0 > spare else x0
         y0 = y0 - spare if y0 > spare else y0
@@ -118,23 +161,26 @@ def cropping(img_path, tol = 0, crop_range_lst = None, spare = 0, save_path = No
         x1 = x1 + spare if x1 < orig_nda.shape[0] - spare else x1
         y1 = y1 + spare if y1 < orig_nda.shape[1] - spare else y1
         z1 = z1 + spare if z1 < orig_nda.shape[2] - spare else z1
-        
+
         # Check the the bounding box #
-        #print('    Cropping Slice [%d, %d)' % (x0, x1))
-        #print('    Cropping Row [%d, %d)' % (y0, y1))
-        #print('    Cropping Column [%d, %d)' % (z0, z1))
+        # print('    Cropping Slice [%d, %d)' % (x0, x1))
+        # print('    Cropping Row [%d, %d)' % (y0, y1))
+        # print('    Cropping Column [%d, %d)' % (z0, z1))
 
     else:
         [[x0, y0, z0], [x1, y1, z1]] = crop_range_lst
 
-
-    cropped_nda = orig_nda[x0 : x1, y0 : y1, z0 : z1]
-    new_origin = [img.GetOrigin()[0] + img.GetSpacing()[0] * z0,\
-        img.GetOrigin()[1] + img.GetSpacing()[1] * y0,\
-            img.GetOrigin()[2] + img.GetSpacing()[2] * x0]  # numpy reverse to sitk'''
-    cropped_img = sitk.GetImageFromArray(cropped_nda, isVector = len(orig_nda.shape) > 3)
+    cropped_nda = orig_nda[x0:x1, y0:y1, z0:z1]
+    new_origin = [
+        img.GetOrigin()[0] + img.GetSpacing()[0] * z0,
+        img.GetOrigin()[1] + img.GetSpacing()[1] * y0,
+        img.GetOrigin()[2] + img.GetSpacing()[2] * x0,
+    ]  # numpy reverse to sitk'''
+    cropped_img = sitk.GetImageFromArray(
+        cropped_nda, isVector=len(orig_nda.shape) > 3
+    )
     cropped_img.SetOrigin(new_origin)
-    #cropped_img.SetOrigin(img.GetOrigin())
+    # cropped_img.SetOrigin(img.GetOrigin())
     cropped_img.SetSpacing(img.GetSpacing())
     cropped_img.SetDirection(img.GetDirection())
     if save_path:
@@ -142,17 +188,17 @@ def cropping(img_path, tol = 0, crop_range_lst = None, spare = 0, save_path = No
 
     return cropped_img, [[x0, y0, z0], [x1, y1, z1]], new_origin
 
-        
-        
+
 def memory_stats():
-    logger.info(torch.cuda.memory_allocated()/1024**2)
-    logger.info(torch.cuda.memory_reserved()/1024**2)
-    
+    logger.info(torch.cuda.memory_allocated() / 1024**2)
+    logger.info(torch.cuda.memory_reserved() / 1024**2)
+
+
 #########################################
 #########################################
 
 
-def viewVolume(x, aff=None, prefix='', postfix='', names=[], save_dir='/tmp'):
+def viewVolume(x, aff=None, prefix="", postfix="", names=[], save_dir="/tmp"):
 
     if aff is None:
         aff = np.eye(4)
@@ -167,7 +213,7 @@ def viewVolume(x, aff=None, prefix='', postfix='', names=[], save_dir='/tmp'):
     if type(x) is not list:
         x = [x]
 
-    #cmd = 'source /usr/local/freesurfer/nmr-dev-env-bash && freeview '
+    # cmd = 'source /usr/local/freesurfer/nmr-dev-env-bash && freeview '
 
     for n in range(len(x)):
         vol = x[n]
@@ -176,16 +222,22 @@ def viewVolume(x, aff=None, prefix='', postfix='', names=[], save_dir='/tmp'):
                 vol = vol.cpu().detach().numpy()
             vol = np.squeeze(np.array(vol))
             try:
-                save_path = os.path.join(save_dir, prefix + names[n] + postfix + '.nii.gz')
+                save_path = os.path.join(
+                    save_dir, prefix + names[n] + postfix + ".nii.gz"
+                )
             except:
-                save_path = os.path.join(save_dir, prefix + str(n) + postfix + '.nii.gz')
+                save_path = os.path.join(
+                    save_dir, prefix + str(n) + postfix + ".nii.gz"
+                )
             MRIwrite(vol, aff, save_path)
-            #cmd = cmd + ' ' + save_path
+            # cmd = cmd + ' ' + save_path
 
-    #os.system(cmd + ' &')
+    # os.system(cmd + ' &')
     return save_path
 
+
 ###############################3
+
 
 def MRIwrite(volume, aff, filename, dtype=None):
 
@@ -199,11 +251,15 @@ def MRIwrite(volume, aff, filename, dtype=None):
 
     nib.save(nifty, filename)
 
+
 ###############################
+
 
 def MRIread(filename, dtype=None, im_only=False):
 
-    assert filename.endswith(('.nii', '.nii.gz', '.mgz')), 'Unknown data file: %s' % filename
+    assert filename.endswith((".nii", ".nii.gz", ".mgz")), (
+        "Unknown data file: %s" % filename
+    )
 
     x = nib.load(filename)
     volume = x.get_fdata()
@@ -216,9 +272,10 @@ def MRIread(filename, dtype=None, im_only=False):
         return volume
     else:
         return volume, aff
- 
+
 
 ##############
+
 
 def get_ras_axes(aff, n_dims=3):
     """This function finds the RAS axes corresponding to each dimension of a volume, based on its affine matrix.
@@ -228,14 +285,13 @@ def get_ras_axes(aff, n_dims=3):
     and one with their corresponding direction.
     """
     aff_inverted = np.linalg.inv(aff)
-    img_ras_axes = np.argmax(np.absolute(aff_inverted[0:n_dims, 0:n_dims]), axis=0)
+    img_ras_axes = np.argmax(
+        np.absolute(aff_inverted[0:n_dims, 0:n_dims]), axis=0
+    )
     return img_ras_axes
 
 
-
-
 def all_gather(data):
-
     """
     Run all_gather on arbitrary picklable data (not necessarily tensors)
     Args:
@@ -264,9 +320,13 @@ def all_gather(data):
     # gathering tensors of different shapes
     tensor_list = []
     for _ in size_list:
-        tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
+        tensor_list.append(
+            torch.empty((max_size,), dtype=torch.uint8, device="cuda")
+        )
     if local_size != max_size:
-        padding = torch.empty(size=(max_size - local_size,), dtype=torch.uint8, device="cuda")
+        padding = torch.empty(
+            size=(max_size - local_size,), dtype=torch.uint8, device="cuda"
+        )
         tensor = torch.cat((tensor, padding), dim=0)
     dist.all_gather(tensor_list, tensor)
 
@@ -309,16 +369,19 @@ def get_sha():
     cwd = os.path.dirname(os.path.abspath(__file__))
 
     def _run(command):
-        return subprocess.check_output(command, cwd=cwd).decode('ascii').strip()
-    sha = 'N/A'
+        return (
+            subprocess.check_output(command, cwd=cwd).decode("ascii").strip()
+        )
+
+    sha = "N/A"
     diff = "clean"
-    branch = 'N/A'
+    branch = "N/A"
     try:
-        sha = _run(['git', 'rev-parse', 'HEAD'])
-        subprocess.check_output(['git', 'diff'], cwd=cwd)
-        diff = _run(['git', 'diff-index', 'HEAD'])
+        sha = _run(["git", "rev-parse", "HEAD"])
+        subprocess.check_output(["git", "diff"], cwd=cwd)
+        diff = _run(["git", "diff-index", "HEAD"])
         diff = "has uncommited changes" if diff else "clean"
-        branch = _run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
+        branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
     except Exception:
         pass
     message = f"sha: {sha}, status: {diff}, branch: {branch}"
@@ -326,9 +389,12 @@ def get_sha():
 
 
 def collate_fn(batch):
-    batch = {k: torch.stack([dict[k] for dict in batch]) for k in batch[0]} # switch from batch of dict to dict of batch
+    batch = {
+        k: torch.stack([dict[k] for dict in batch]) for k in batch[0]
+    }  # switch from batch of dict to dict of batch
     return batch
-    #v = {k: [dic[k] for dic in LD] for k in LD[0]}
+    # v = {k: [dic[k] for dic in LD] for k in LD[0]}
+
 
 def _max_by_axis(the_list):
     # type: (List[List[int]]) -> List[int]
@@ -339,7 +405,7 @@ def _max_by_axis(the_list):
     return maxes
 
 
-def launch_job(cfg, func, daemon = False):
+def launch_job(cfg, func, daemon=False):
     """
     Run 'func' on one or more GPUs, specified in cfg
     Args:
@@ -351,7 +417,7 @@ def launch_job(cfg, func, daemon = False):
         daemon (bool): The spawned processes’ daemon flag. If set to True,
             daemonic processes will be created
     """
-    logger.info('num_gpus:', cfg.num_gpus)
+    logger.info("num_gpus:", cfg.num_gpus)
     if cfg.num_gpus >= 1:
         torch.multiprocessing.spawn(
             mpu.run,
@@ -365,17 +431,17 @@ def launch_job(cfg, func, daemon = False):
                 cfg.dist_backend,
                 cfg,
             ),
-            daemon = daemon,
+            daemon=daemon,
         )
     else:
         func(cfg)
 
 
-def preprocess_cfg(cfg_files, cfg_dir = ''):
-    config = load_config(cfg_files[0], cfg_files[1:], cfg_dir)
-    
-    args = nested_dict_to_namespace(config)
-    return args
+# def preprocess_cfg(cfg_files, cfg_dir=""):
+#     config = load_config(cfg_files[0], cfg_files[1:], cfg_dir)
+
+#     args = nested_dict_to_namespace(config)
+#     return args
 
 
 def setup_for_distributed(is_master):
@@ -383,10 +449,11 @@ def setup_for_distributed(is_master):
     This function disables printing when not in master process
     """
     import builtins as __builtin__
+
     builtin_print = __builtin__.print
 
     def print(*args, **kwargs):
-        force = kwargs.pop('force', False)
+        force = kwargs.pop("force", False)
 
         if is_master or force:
             builtin_print(*args, **kwargs)
@@ -394,10 +461,13 @@ def setup_for_distributed(is_master):
     __builtin__.print = print
 
     if not is_master:
+
         def line(*args, **kwargs):
             pass
+
         def images(*args, **kwargs):
             pass
+
         Visdom.line = line
         Visdom.images = images
 
@@ -431,53 +501,6 @@ def save_on_master(*args, **kwargs):
         torch.save(*args, **kwargs)
 
 
-def init_distributed_mode(cfg):
-    """
-    Initialize variables needed for distributed training.
-    """
-    if cfg.num_gpus <= 1:
-        return
-    num_gpus_per_machine = cfg.num_gpus
-    num_machines = dist.get_world_size() // num_gpus_per_machine
-    logger.info(num_gpus_per_machine, dist.get_world_size())
-    for i in range(num_machines):
-        ranks_on_i = list(
-            range(i * num_gpus_per_machine, (i + 1) * num_gpus_per_machine)
-        )
-        pg = dist.new_group(ranks_on_i)
-        if i == cfg.shard_id:
-            global _LOCAL_PROCESS_GROUP
-            _LOCAL_PROCESS_GROUP = pg
-
-'''def init_distributed_mode(args):
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        #args.rank = int(os.environ["RANK"])
-        #args.world_size = int(os.environ['WORLD_SIZE'])
-        #args.gpu = int(os.environ['LOCAL_RANK'])
-        pass
-    elif 'SLURM_PROCID' in os.environ and 'SLURM_PTY_PORT' not in os.environ:
-        # slurm process but not interactive
-        args.rank = int(os.environ['SLURM_PROCID'])
-        args.gpu = args.rank % torch.cuda.device_count()
-    elif args.num_gpus < 1:
-        print('Not using distributed mode')
-        #args.distributed = False
-        return
-
-    args.world_size = int(args.num_gpus * args.nodes)
-
-    #args.distributed = True
-
-    torch.cuda.set_device(args.gpu)
-    #args.dist_backend = 'nccl'
-    print(f'| distributed init (rank {args.rank}): {args.dist_url}', flush=True)
-    torch.distributed.init_process_group(
-        backend=args.dist_backend, init_method=args.dist_url,
-        world_size=args.world_size, rank=args.rank)
-    # torch.distributed.barrier()
-    setup_for_distributed(args.rank == 0)'''
-
-
 @torch.no_grad()
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
@@ -497,7 +520,9 @@ def accuracy(output, target, topk=(1,)):
     return res
 
 
-def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corners=None):
+def interpolate(
+    input, size=None, scale_factor=None, mode="nearest", align_corners=None
+):
     # type: (Tensor, Optional[List[int]], Optional[float], str, Optional[bool]) -> Tensor
     """
     Equivalent to nn.functional.interpolate, but with support for empty batch sizes.
@@ -514,12 +539,23 @@ def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corne
         output_shape = list(input.shape[:-2]) + list(output_shape)
         return _new_empty_tensor(input, output_shape)
     else:
-        return torchvision.ops.misc.interpolate(input, size, scale_factor, mode, align_corners)
+        return torchvision.ops.misc.interpolate(
+            input, size, scale_factor, mode, align_corners
+        )
 
 
 class DistributedWeightedSampler(torch.utils.data.DistributedSampler):
-    def __init__(self, dataset, num_replicas=None, rank=None, shuffle=True, replacement=True):
-        super(DistributedWeightedSampler, self).__init__(dataset, num_replicas, rank, shuffle)
+    def __init__(
+        self,
+        dataset,
+        num_replicas=None,
+        rank=None,
+        shuffle=True,
+        replacement=True,
+    ):
+        super(DistributedWeightedSampler, self).__init__(
+            dataset, num_replicas, rank, shuffle
+        )
 
         assert replacement
 
@@ -527,16 +563,19 @@ class DistributedWeightedSampler(torch.utils.data.DistributedSampler):
 
     def __iter__(self):
         iter_indices = super(DistributedWeightedSampler, self).__iter__()
-        if hasattr(self.dataset, 'sample_weight'):
+        if hasattr(self.dataset, "sample_weight"):
             indices = list(iter_indices)
 
-            weights = torch.tensor([self.dataset.sample_weight(idx) for idx in indices])
+            weights = torch.tensor(
+                [self.dataset.sample_weight(idx) for idx in indices]
+            )
 
             g = torch.Generator()
             g.manual_seed(self.epoch)
 
             weight_indices = torch.multinomial(
-                weights, self.num_samples, self.replacement, generator=g)
+                weights, self.num_samples, self.replacement, generator=g
+            )
             indices = torch.tensor(indices)[weight_indices]
 
             iter_indices = iter(indices.tolist())
@@ -550,7 +589,7 @@ def inverse_sigmoid(x, eps=1e-5):
     x = x.clamp(min=0, max=1)
     x1 = x.clamp(min=eps)
     x2 = (1 - x).clamp(min=eps)
-    return torch.log(x1/x2)
+    return torch.log(x1 / x2)
 
 
 def dice_loss(inputs, targets, num_boxes):
@@ -571,7 +610,15 @@ def dice_loss(inputs, targets, num_boxes):
     return loss.sum() / num_boxes
 
 
-def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2, query_mask=None, reduction=True):
+def sigmoid_focal_loss(
+    inputs,
+    targets,
+    num_boxes,
+    alpha: float = 0.25,
+    gamma: float = 2,
+    query_mask=None,
+    reduction=True,
+):
     """
     Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
     Args:
@@ -588,7 +635,9 @@ def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: f
         Loss tensor
     """
     prob = inputs.sigmoid()
-    ce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
+    ce_loss = F.binary_cross_entropy_with_logits(
+        inputs, targets, reduction="none"
+    )
     p_t = prob * targets + (1 - prob) * (1 - targets)
     loss = ce_loss * ((1 - p_t) ** gamma)
 
@@ -614,26 +663,23 @@ def nested_dict_to_namespace(dictionary):
     return namespace
 
 
-
 def nested_dict_to_device(dictionary, device):
-    
+
     if isinstance(dictionary, dict):
         output = {}
         for key, value in dictionary.items():
             output[key] = nested_dict_to_device(value, device)
         return output
-    
+
     if isinstance(dictionary, str):
         return dictionary
     elif isinstance(dictionary, list):
-        return [nested_dict_to_device(d, device) for d in dictionary] 
+        return [nested_dict_to_device(d, device) for d in dictionary]
     else:
         try:
             return dictionary.to(device)
         except:
             return dictionary
-
-
 
 
 class SmoothedValue(object):
@@ -646,7 +692,7 @@ class SmoothedValue(object):
             fmt = "{median:.4f} ({global_avg:.4f})"
         self.deque = deque(maxlen=window_size)
         self.total = 0.0
-        self.count = 0 
+        self.count = 0
         self.fmt = fmt
 
     def update(self, value, n=1):
@@ -660,7 +706,9 @@ class SmoothedValue(object):
         """
         if not is_dist_avail_and_initialized():
             return
-        t = torch.tensor([self.count, self.total], dtype=torch.float64, device='cuda')
+        t = torch.tensor(
+            [self.count, self.total], dtype=torch.float64, device="cuda"
+        )
         dist.barrier()
         dist.all_reduce(t)
         t = t.tolist()
@@ -695,12 +743,162 @@ class SmoothedValue(object):
             avg=self.avg,
             global_avg=self.global_avg,
             max=self.max,
-            value=self.value)
+            value=self.value,
+        )
 
+
+from sklearn.metrics import (
+    balanced_accuracy_score,
+    confusion_matrix,
+    roc_auc_score,
+)
+
+
+def log_step(step_logger, logger, epoch, step="train", log_csv=None):
+    import pdb
+
+    tn, fp, fn, tp = confusion_matrix(
+        step_logger.target_binary, step_logger.pred_binary
+    ).ravel()
+    # print("Confusion matrix")
+    # print(tn, fp)
+    # print(fn, tp)
+    # pdb.set_trce()
+    bacc = balanced_accuracy_score(
+        step_logger.target_binary, step_logger.pred_binary
+    )
+    if len(np.unique(step_logger.target_binary)) > 1:
+        roc_auc = roc_auc_score(
+            step_logger.target_binary, step_logger.pred_proba[:, 1]
+        )
+    else:
+        roc_auc = np.nan
+
+    sensitivity = tp / (tp + fn)
+    specificity = tn / (tn + fp)
+    logger.log(
+        {
+            f"{step}/bacc": bacc,
+            f"{step}/roc_auc": roc_auc,
+            f"{step}/sensitivity": sensitivity,
+            f"{step}/specificity": specificity,
+            f"{step}/tn": tn,
+            f"{step}/fp": fp,
+            f"{step}/fn": fn,
+            f"{step}/tp": tp,
+            f"{step}/epoch": epoch,
+        }
+    )
+    if step == "train":
+        loss = np.mean(step_logger.predictions["loss"])
+        lr = np.mean(step_logger.predictions["lr"])
+        wd = np.mean(step_logger.predictions["wd"])
+        logger.log(
+            {
+                f"{step}/loss": loss,
+                f"{step}/lr": lr,
+                f"{step}/wd": wd,
+            }
+        )
+    if log_csv is not None:
+        import pandas as pd
+
+        if os.path.isfile(log_csv):
+            df = pd.read_csv(log_csv)
+        else:
+            # df = pd.DataFrame(columns=["name", "target"])
+            # pdb.set_trace()
+            df_dict = {
+                "name": step_logger.predictions["name"],
+                "target": step_logger.predictions["target"][:, 1]
+                .cpu()
+                .tolist(),
+                "qcglobal": step_logger.predictions["qcglobal"][:, 0]
+                .cpu()
+                .tolist(),
+            }
+            # names =
+            # # Swapping indices according to sorted(names)
+            # indices = np.argsort(names)
+            # names = [names[i] for i in indices]
+
+            # target = step_logger.predictions["target"][indices].cpu().numpy()
+            # df["name"] = names
+            # df["target"] = target
+            # df["qcglobal"] = (
+            #     step_logger.predictions["qcglobal"][indices].cpu().numpy()
+            # )
+            df = pd.DataFrame(df_dict)
+            df = df.sort_values(by="name")
+        cols = ["name", f"pred_{epoch}_0", f"pred_{epoch}_1"]
+        df_epoch = pd.DataFrame(columns=cols)
+        pred = step_logger.pred_proba
+        for name, p in zip(
+            step_logger.predictions["name"],
+            pred,
+        ):
+            df_row = pd.DataFrame(columns=cols, data=[[name, p[0], p[1]]])
+            df_epoch = pd.concat([df_epoch, df_row], ignore_index=True)
+
+        # pdb.set_trace()
+        df = pd.merge(df, df_epoch, on="name")
+        df.to_csv(log_csv, index=False)
+
+
+class PredictionLoggerQC(object):
+    def __init__(
+        self,
+    ):
+        self.predictions = {}
+
+    def update_key(self, key, value):
+        if isinstance(value, torch.Tensor):
+            if key in self.predictions:
+                self.predictions[key] = torch.concat(
+                    [self.predictions[key], value], 0
+                )
+            else:
+                self.predictions[key] = value
+        elif isinstance(value, list):
+            if key in self.predictions:
+                self.predictions[key] += value
+            else:
+                self.predictions[key] = value
+        else:
+            if key in self.predictions:
+                self.predictions[key].append(value)
+            else:
+                self.predictions[key] = [value]
+
+    def update(self, **kwargs):
+        for k, v in kwargs.items():
+            self.update_key(k, v)
+
+    @property
+    def pred(self):
+        return self.predictions["pred"].cpu().numpy()
+
+    @property
+    def pred_proba(self):
+        return torch.softmax(self.predictions["pred"], dim=1).cpu().numpy()
+
+    @property
+    def pred_binary(self):
+        return self.predictions["pred"].argmax(dim=1).cpu().numpy()
+
+    @property
+    def target(self):
+        return self.predictions["target"].cpu().numpy()
+
+    @property
+    def target_binary(self):
+        return self.predictions["target_binary"].cpu().numpy()
 
 
 class MetricLogger(object):
-    def __init__(self, print_freq, delimiter="\t", debug=False, sample_freq=None):
+    def __init__(
+        self, print_freq, delimiter="\t", debug=False, sample_freq=None
+    ):
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
         self.print_freq = print_freq
@@ -719,8 +917,11 @@ class MetricLogger(object):
             return self.meters[attr]
         if attr in self.__dict__:
             return self.__dict__[attr]
-        raise AttributeError("'{}' object has no attribute '{}'".format(
-            type(self).__name__, attr))
+        raise AttributeError(
+            "'{}' object has no attribute '{}'".format(
+                type(self).__name__, attr
+            )
+        )
 
     def __str__(self):
         loss_str = []
@@ -735,67 +936,97 @@ class MetricLogger(object):
     def add_meter(self, name, meter):
         self.meters[name] = meter
 
-    def log_every(self, iterable, epoch=None, header=None, is_test=False, dataset_name='', modality='', train_limit=None, test_limit=None):
-        
+    def log_every(
+        self,
+        iterable,
+        epoch=None,
+        header=None,
+        is_test=False,
+        dataset_name="",
+        modality="",
+        train_limit=None,
+        test_limit=None,
+    ):
+
         i = 0
         if header is None:
-            header = 'Epoch: [{}]'.format(epoch)
+            header = "Epoch: [{}]".format(epoch)
 
         start_time = time.time()
         end = time.time()
-        iter_time = SmoothedValue(fmt='{avg:.4f}')
-        data_time = SmoothedValue(fmt='{avg:.4f}')
-        space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
+        iter_time = SmoothedValue(fmt="{avg:.4f}")
+        data_time = SmoothedValue(fmt="{avg:.4f}")
+        space_fmt = ":" + str(len(str(len(iterable)))) + "d"
 
         if torch.cuda.is_available():
-            log_msg = self.delimiter.join([
-                header,
-                '[{0' + space_fmt + '}/{1}]',
-                'dataset: {}'.format(dataset_name),
-                'modality: {}'.format(modality),
-                'eta: {eta}',
-                '{meters}',
-                'time: {time}',
-                'data: {data}',
-                'max mem: {memory:.0f}',
-            ])
+            log_msg = self.delimiter.join(
+                [
+                    header,
+                    "[{0" + space_fmt + "}/{1}]",
+                    "dataset: {}".format(dataset_name),
+                    "modality: {}".format(modality),
+                    "eta: {eta}",
+                    "{meters}",
+                    "time: {time}",
+                    "data: {data}",
+                    "max mem: {memory:.0f}",
+                ]
+            )
         else:
-            log_msg = self.delimiter.join([
-                header,
-                '[{0' + space_fmt + '}/{1}]',
-                'dataset: {}'.format(dataset_name),
-                'modality: {}'.format(modality),
-                'eta: {eta}',
-                '{meters}',
-                'time: {time}',
-                'data_time: {data}',
-            ])
+            log_msg = self.delimiter.join(
+                [
+                    header,
+                    "[{0" + space_fmt + "}/{1}]",
+                    "dataset: {}".format(dataset_name),
+                    "modality: {}".format(modality),
+                    "eta: {eta}",
+                    "{meters}",
+                    "time: {time}",
+                    "data_time: {data}",
+                ]
+            )
         MB = 1024.0 * 1024.0
 
         for obj in iterable:
-            if train_limit and i >= train_limit and not is_test: # train sub-set
+            if (
+                train_limit and i >= train_limit and not is_test
+            ):  # train sub-set
                 break
-            if test_limit and i >= test_limit and is_test: # limit test iterations (1000)
+            if (
+                test_limit and i >= test_limit and is_test
+            ):  # limit test iterations (1000)
                 break
 
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
-            
+
             if i % self.print_freq == 0 or i == len(iterable) - 1:
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
                 eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
                 if torch.cuda.is_available():
-                    logger.info(log_msg.format(
-                        i , len(iterable), eta=eta_string,
-                        meters=str(self),
-                        time=str(iter_time), data=str(data_time),
-                        memory=torch.cuda.max_memory_allocated() / MB))
+                    logger.info(
+                        log_msg.format(
+                            i,
+                            len(iterable),
+                            eta=eta_string,
+                            meters=str(self),
+                            time=str(iter_time),
+                            data=str(data_time),
+                            memory=torch.cuda.max_memory_allocated() / MB,
+                        )
+                    )
                 else:
-                    logger.info(log_msg.format(
-                        i, len(iterable), eta=eta_string,
-                        meters=str(self),
-                        time=str(iter_time), data=str(data_time)))
+                    logger.info(
+                        log_msg.format(
+                            i,
+                            len(iterable),
+                            eta=eta_string,
+                            meters=str(self),
+                            time=str(iter_time),
+                            data=str(data_time),
+                        )
+                    )
 
                 if self.debug and i % self.print_freq == 0:
                     break
@@ -805,300 +1036,448 @@ class MetricLogger(object):
 
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        logger.info('{} Total time: {} ({:.4f} s / it)'.format(
-            header, total_time_str, total_time / len(iterable)))
+        logger.info(
+            "{} Total time: {} ({:.4f} s / it)".format(
+                header, total_time_str, total_time / len(iterable)
+            )
+        )
 
 
 ######################### Synth #########################
 
+
 def myzoom_torch_slow(X, factor, device, aff=None):
 
-    if len(X.shape)==3:
+    if len(X.shape) == 3:
         X = X[..., None]
 
     delta = (1.0 - factor) / (2.0 * factor)
     newsize = np.round(X.shape[:-1] * factor).astype(int)
 
-    vx = torch.arange(delta[0], delta[0] + newsize[0] / factor[0], 1 / factor[0], dtype=torch.float, device=device)[:newsize[0]]
-    vy = torch.arange(delta[1], delta[1] + newsize[1] / factor[1], 1 / factor[1], dtype=torch.float, device=device)[:newsize[1]]
-    vz = torch.arange(delta[2], delta[2] + newsize[2] / factor[2], 1 / factor[2], dtype=torch.float, device=device)[:newsize[2]]
+    vx = torch.arange(
+        delta[0],
+        delta[0] + newsize[0] / factor[0],
+        1 / factor[0],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[0]]
+    vy = torch.arange(
+        delta[1],
+        delta[1] + newsize[1] / factor[1],
+        1 / factor[1],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[1]]
+    vz = torch.arange(
+        delta[2],
+        delta[2] + newsize[2] / factor[2],
+        1 / factor[2],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[2]]
 
     vx[vx < 0] = 0
     vy[vy < 0] = 0
     vz[vz < 0] = 0
-    vx[vx > (X.shape[0]-1)] = (X.shape[0]-1)
-    vy[vy > (X.shape[1] - 1)] = (X.shape[1] - 1)
-    vz[vz > (X.shape[2] - 1)] = (X.shape[2] - 1)
+    vx[vx > (X.shape[0] - 1)] = X.shape[0] - 1
+    vy[vy > (X.shape[1] - 1)] = X.shape[1] - 1
+    vz[vz > (X.shape[2] - 1)] = X.shape[2] - 1
 
     fx = torch.floor(vx).int()
     cx = fx + 1
-    cx[cx > (X.shape[0]-1)] = (X.shape[0]-1)
+    cx[cx > (X.shape[0] - 1)] = X.shape[0] - 1
     wcx = vx - fx
     wfx = 1 - wcx
 
     fy = torch.floor(vy).int()
     cy = fy + 1
-    cy[cy > (X.shape[1]-1)] = (X.shape[1]-1)
+    cy[cy > (X.shape[1] - 1)] = X.shape[1] - 1
     wcy = vy - fy
     wfy = 1 - wcy
 
     fz = torch.floor(vz).int()
     cz = fz + 1
-    cz[cz > (X.shape[2]-1)] = (X.shape[2]-1)
+    cz[cz > (X.shape[2] - 1)] = X.shape[2] - 1
     wcz = vz - fz
     wfz = 1 - wcz
 
-    Y = torch.zeros([newsize[0], newsize[1], newsize[2], X.shape[3]], dtype=torch.float, device=device)
+    Y = torch.zeros(
+        [newsize[0], newsize[1], newsize[2], X.shape[3]],
+        dtype=torch.float,
+        device=device,
+    )
 
     for channel in range(X.shape[3]):
-        Xc = X[:,:,:,channel]
+        Xc = X[:, :, :, channel]
 
-        tmp1 = torch.zeros([newsize[0], Xc.shape[1], Xc.shape[2]], dtype=torch.float, device=device)
-        for i in range(newsize[0]):  
-            tmp1[i, :, :] = wfx[i] * Xc[fx[i], :, :] +  wcx[i] * Xc[cx[i], :, :]
-        tmp2 = torch.zeros([newsize[0], newsize[1], Xc.shape[2]], dtype=torch.float, device=device)
+        tmp1 = torch.zeros(
+            [newsize[0], Xc.shape[1], Xc.shape[2]],
+            dtype=torch.float,
+            device=device,
+        )
+        for i in range(newsize[0]):
+            tmp1[i, :, :] = wfx[i] * Xc[fx[i], :, :] + wcx[i] * Xc[cx[i], :, :]
+        tmp2 = torch.zeros(
+            [newsize[0], newsize[1], Xc.shape[2]],
+            dtype=torch.float,
+            device=device,
+        )
         for j in range(newsize[1]):
-            tmp2[:, j, :] = wfy[j] * tmp1[:, fy[j], :] +  wcy[j] * tmp1[:, cy[j], :]
+            tmp2[:, j, :] = (
+                wfy[j] * tmp1[:, fy[j], :] + wcy[j] * tmp1[:, cy[j], :]
+            )
         for k in range(newsize[2]):
-            Y[:, :, k, channel] = wfz[k] * tmp2[:, :, fz[k]] +  wcz[k] * tmp2[:, :, cz[k]]
+            Y[:, :, k, channel] = (
+                wfz[k] * tmp2[:, :, fz[k]] + wcz[k] * tmp2[:, :, cz[k]]
+            )
 
     if Y.shape[3] == 1:
-        Y = Y[:,:,:, 0]
+        Y = Y[:, :, :, 0]
 
     if aff is not None:
         aff_new = aff.copy()
         for c in range(3):
             aff_new[:-1, c] = aff_new[:-1, c] / factor
-        aff_new[:-1, -1] = aff_new[:-1, -1] - aff[:-1, :-1] @ (0.5 - 0.5 / (factor * np.ones(3)))
+        aff_new[:-1, -1] = aff_new[:-1, -1] - aff[:-1, :-1] @ (
+            0.5 - 0.5 / (factor * np.ones(3))
+        )
         return Y, aff_new
     else:
         return Y
-    
+
+
 def myzoom_torch(X, factor, aff=None):
 
-    if len(X.shape)==3:
+    if len(X.shape) == 3:
         X = X[..., None]
 
     delta = (1.0 - factor) / (2.0 * factor)
     newsize = np.round(X.shape[:-1] * factor).astype(int)
 
-    vx = torch.arange(delta[0], delta[0] + newsize[0] / factor[0], 1 / factor[0], dtype=torch.float, device=X.device)[:newsize[0]]
-    vy = torch.arange(delta[1], delta[1] + newsize[1] / factor[1], 1 / factor[1], dtype=torch.float, device=X.device)[:newsize[1]]
-    vz = torch.arange(delta[2], delta[2] + newsize[2] / factor[2], 1 / factor[2], dtype=torch.float, device=X.device)[:newsize[2]]
+    vx = torch.arange(
+        delta[0],
+        delta[0] + newsize[0] / factor[0],
+        1 / factor[0],
+        dtype=torch.float,
+        device=X.device,
+    )[: newsize[0]]
+    vy = torch.arange(
+        delta[1],
+        delta[1] + newsize[1] / factor[1],
+        1 / factor[1],
+        dtype=torch.float,
+        device=X.device,
+    )[: newsize[1]]
+    vz = torch.arange(
+        delta[2],
+        delta[2] + newsize[2] / factor[2],
+        1 / factor[2],
+        dtype=torch.float,
+        device=X.device,
+    )[: newsize[2]]
 
     vx[vx < 0] = 0
     vy[vy < 0] = 0
     vz[vz < 0] = 0
-    vx[vx > (X.shape[0]-1)] = (X.shape[0]-1)
-    vy[vy > (X.shape[1] - 1)] = (X.shape[1] - 1)
-    vz[vz > (X.shape[2] - 1)] = (X.shape[2] - 1)
+    vx[vx > (X.shape[0] - 1)] = X.shape[0] - 1
+    vy[vy > (X.shape[1] - 1)] = X.shape[1] - 1
+    vz[vz > (X.shape[2] - 1)] = X.shape[2] - 1
 
     fx = torch.floor(vx).int()
     cx = fx + 1
-    cx[cx > (X.shape[0]-1)] = (X.shape[0]-1)
-    wcx = (vx - fx) 
+    cx[cx > (X.shape[0] - 1)] = X.shape[0] - 1
+    wcx = vx - fx
     wfx = 1 - wcx
 
     fy = torch.floor(vy).int()
     cy = fy + 1
-    cy[cy > (X.shape[1]-1)] = (X.shape[1]-1)
-    wcy = (vy - fy) 
+    cy[cy > (X.shape[1] - 1)] = X.shape[1] - 1
+    wcy = vy - fy
     wfy = 1 - wcy
 
     fz = torch.floor(vz).int()
     cz = fz + 1
-    cz[cz > (X.shape[2]-1)] = (X.shape[2]-1)
-    wcz = (vz - fz) 
+    cz[cz > (X.shape[2] - 1)] = X.shape[2] - 1
+    wcz = vz - fz
     wfz = 1 - wcz
 
-    Y = torch.zeros([newsize[0], newsize[1], newsize[2], X.shape[3]], dtype=torch.float, device=X.device) 
+    Y = torch.zeros(
+        [newsize[0], newsize[1], newsize[2], X.shape[3]],
+        dtype=torch.float,
+        device=X.device,
+    )
 
-    tmp1 = torch.zeros([newsize[0], X.shape[1], X.shape[2], X.shape[3]], dtype=torch.float, device=X.device)
+    tmp1 = torch.zeros(
+        [newsize[0], X.shape[1], X.shape[2], X.shape[3]],
+        dtype=torch.float,
+        device=X.device,
+    )
     for i in range(newsize[0]):
-        tmp1[i, :, :] = wfx[i] * X[fx[i], :, :] +  wcx[i] * X[cx[i], :, :]
-    tmp2 = torch.zeros([newsize[0], newsize[1], X.shape[2], X.shape[3]], dtype=torch.float, device=X.device)
+        tmp1[i, :, :] = wfx[i] * X[fx[i], :, :] + wcx[i] * X[cx[i], :, :]
+    tmp2 = torch.zeros(
+        [newsize[0], newsize[1], X.shape[2], X.shape[3]],
+        dtype=torch.float,
+        device=X.device,
+    )
     for j in range(newsize[1]):
-        tmp2[:, j, :] = wfy[j] * tmp1[:, fy[j], :] +  wcy[j] * tmp1[:, cy[j], :]
+        tmp2[:, j, :] = wfy[j] * tmp1[:, fy[j], :] + wcy[j] * tmp1[:, cy[j], :]
     for k in range(newsize[2]):
-        Y[:, :, k] = wfz[k] * tmp2[:, :, fz[k]] +  wcz[k] * tmp2[:, :, cz[k]]
+        Y[:, :, k] = wfz[k] * tmp2[:, :, fz[k]] + wcz[k] * tmp2[:, :, cz[k]]
 
     if Y.shape[3] == 1:
-        Y = Y[:,:,:, 0]
+        Y = Y[:, :, :, 0]
 
     if aff is not None:
-        aff_new = aff.copy() 
+        aff_new = aff.copy()
         aff_new[:-1] = aff_new[:-1] / factor
-        aff_new[:-1, -1] = aff_new[:-1, -1] - aff[:-1, :-1] @ (0.5 - 0.5 / (factor * np.ones(3)))
+        aff_new[:-1, -1] = aff_new[:-1, -1] - aff[:-1, :-1] @ (
+            0.5 - 0.5 / (factor * np.ones(3))
+        )
         return Y, aff_new
     else:
         return Y
+
 
 def myzoom_torch_test(X, factor, aff=None):
     time.sleep(3)
 
     start_time = time.time()
     Y2 = myzoom_torch_slow(X, factor, aff)
-    print('slow', X.shape[-1], time.time() - start_time)
+    print("slow", X.shape[-1], time.time() - start_time)
 
     time.sleep(3)
 
     start_time = time.time()
     Y1 = myzoom_torch(X, factor, aff)
-    print('fast', X.shape[-1], time.time() - start_time)
+    print("fast", X.shape[-1], time.time() - start_time)
 
     time.sleep(3)
 
-    print('diff', (Y2 - Y1).mean(), (Y2 - Y1).max())
+    print("diff", (Y2 - Y1).mean(), (Y2 - Y1).max())
     return Y1
+
 
 def myzoom_torch_anisotropic_slow(X, aff, newsize, device):
 
-    if len(X.shape)==3:
+    if len(X.shape) == 3:
         X = X[..., None]
 
     factors = np.array(newsize) / np.array(X.shape[:-1])
     delta = (1.0 - factors) / (2.0 * factors)
 
-    vx = torch.arange(delta[0], delta[0] + newsize[0] / factors[0], 1 / factors[0], dtype=torch.float, device=device)[:newsize[0]]
-    vy = torch.arange(delta[1], delta[1] + newsize[1] / factors[1], 1 / factors[1], dtype=torch.float, device=device)[:newsize[1]]
-    vz = torch.arange(delta[2], delta[2] + newsize[2] / factors[2], 1 / factors[2], dtype=torch.float, device=device)[:newsize[2]]
+    vx = torch.arange(
+        delta[0],
+        delta[0] + newsize[0] / factors[0],
+        1 / factors[0],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[0]]
+    vy = torch.arange(
+        delta[1],
+        delta[1] + newsize[1] / factors[1],
+        1 / factors[1],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[1]]
+    vz = torch.arange(
+        delta[2],
+        delta[2] + newsize[2] / factors[2],
+        1 / factors[2],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[2]]
 
     vx[vx < 0] = 0
     vy[vy < 0] = 0
     vz[vz < 0] = 0
-    vx[vx > (X.shape[0]-1)] = (X.shape[0]-1)
-    vy[vy > (X.shape[1] - 1)] = (X.shape[1] - 1)
-    vz[vz > (X.shape[2] - 1)] = (X.shape[2] - 1)
+    vx[vx > (X.shape[0] - 1)] = X.shape[0] - 1
+    vy[vy > (X.shape[1] - 1)] = X.shape[1] - 1
+    vz[vz > (X.shape[2] - 1)] = X.shape[2] - 1
 
     fx = torch.floor(vx).int()
     cx = fx + 1
-    cx[cx > (X.shape[0]-1)] = (X.shape[0]-1)
+    cx[cx > (X.shape[0] - 1)] = X.shape[0] - 1
     wcx = vx - fx
     wfx = 1 - wcx
 
     fy = torch.floor(vy).int()
     cy = fy + 1
-    cy[cy > (X.shape[1]-1)] = (X.shape[1]-1)
+    cy[cy > (X.shape[1] - 1)] = X.shape[1] - 1
     wcy = vy - fy
     wfy = 1 - wcy
 
     fz = torch.floor(vz).int()
     cz = fz + 1
-    cz[cz > (X.shape[2]-1)] = (X.shape[2]-1)
+    cz[cz > (X.shape[2] - 1)] = X.shape[2] - 1
     wcz = vz - fz
     wfz = 1 - wcz
 
-    Y = torch.zeros([newsize[0], newsize[1], newsize[2], X.shape[3]], dtype=torch.float, device=device)
+    Y = torch.zeros(
+        [newsize[0], newsize[1], newsize[2], X.shape[3]],
+        dtype=torch.float,
+        device=device,
+    )
 
     dtype = X.dtype
     for channel in range(X.shape[3]):
-        Xc = X[:,:,:,channel]
+        Xc = X[:, :, :, channel]
 
-        tmp1 = torch.zeros([newsize[0], Xc.shape[1], Xc.shape[2]], dtype=dtype, device=device)
+        tmp1 = torch.zeros(
+            [newsize[0], Xc.shape[1], Xc.shape[2]], dtype=dtype, device=device
+        )
         for i in range(newsize[0]):
-            tmp1[i, :, :] = wfx[i] * Xc[fx[i], :, :] +  wcx[i] * Xc[cx[i], :, :]
-        tmp2 = torch.zeros([newsize[0], newsize[1], Xc.shape[2]], dtype=dtype, device=device)
+            tmp1[i, :, :] = wfx[i] * Xc[fx[i], :, :] + wcx[i] * Xc[cx[i], :, :]
+        tmp2 = torch.zeros(
+            [newsize[0], newsize[1], Xc.shape[2]], dtype=dtype, device=device
+        )
         for j in range(newsize[1]):
-            tmp2[:, j, :] = wfy[j] * tmp1[:, fy[j], :] +  wcy[j] * tmp1[:, cy[j], :]
+            tmp2[:, j, :] = (
+                wfy[j] * tmp1[:, fy[j], :] + wcy[j] * tmp1[:, cy[j], :]
+            )
         for k in range(newsize[2]):
-            Y[:, :, k, channel] = wfz[k] * tmp2[:, :, fz[k]] +  wcz[k] * tmp2[:, :, cz[k]]
+            Y[:, :, k, channel] = (
+                wfz[k] * tmp2[:, :, fz[k]] + wcz[k] * tmp2[:, :, cz[k]]
+            )
 
     if Y.shape[3] == 1:
-        Y = Y[:,:,:, 0]
+        Y = Y[:, :, :, 0]
 
     if aff is not None:
         aff_new = aff.copy()
         for c in range(3):
             aff_new[:-1, c] = aff_new[:-1, c] / factors[c]
-        aff_new[:-1, -1] = aff_new[:-1, -1] - aff[:-1, :-1] @ (0.5 - 0.5 / factors)
+        aff_new[:-1, -1] = aff_new[:-1, -1] - aff[:-1, :-1] @ (
+            0.5 - 0.5 / factors
+        )
         return Y, aff_new
     else:
         return Y
-    
 
 
 def myzoom_torch_anisotropic(X, aff, newsize):
 
     device = X.device
 
-    if len(X.shape)==3:
+    if len(X.shape) == 3:
         X = X[..., None]
 
     factors = np.array(newsize) / np.array(X.shape[:-1])
     delta = (1.0 - factors) / (2.0 * factors)
 
-    vx = torch.arange(delta[0], delta[0] + newsize[0] / factors[0], 1 / factors[0], dtype=torch.float, device=device)[:newsize[0]]
-    vy = torch.arange(delta[1], delta[1] + newsize[1] / factors[1], 1 / factors[1], dtype=torch.float, device=device)[:newsize[1]]
-    vz = torch.arange(delta[2], delta[2] + newsize[2] / factors[2], 1 / factors[2], dtype=torch.float, device=device)[:newsize[2]]
+    vx = torch.arange(
+        delta[0],
+        delta[0] + newsize[0] / factors[0],
+        1 / factors[0],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[0]]
+    vy = torch.arange(
+        delta[1],
+        delta[1] + newsize[1] / factors[1],
+        1 / factors[1],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[1]]
+    vz = torch.arange(
+        delta[2],
+        delta[2] + newsize[2] / factors[2],
+        1 / factors[2],
+        dtype=torch.float,
+        device=device,
+    )[: newsize[2]]
 
     vx[vx < 0] = 0
     vy[vy < 0] = 0
     vz[vz < 0] = 0
-    vx[vx > (X.shape[0]-1)] = (X.shape[0]-1)
-    vy[vy > (X.shape[1] - 1)] = (X.shape[1] - 1)
-    vz[vz > (X.shape[2] - 1)] = (X.shape[2] - 1)
+    vx[vx > (X.shape[0] - 1)] = X.shape[0] - 1
+    vy[vy > (X.shape[1] - 1)] = X.shape[1] - 1
+    vz[vz > (X.shape[2] - 1)] = X.shape[2] - 1
 
     fx = torch.floor(vx).int()
     cx = fx + 1
-    cx[cx > (X.shape[0]-1)] = (X.shape[0]-1)
+    cx[cx > (X.shape[0] - 1)] = X.shape[0] - 1
     wcx = vx - fx
     wfx = 1 - wcx
 
     fy = torch.floor(vy).int()
     cy = fy + 1
-    cy[cy > (X.shape[1]-1)] = (X.shape[1]-1)
+    cy[cy > (X.shape[1] - 1)] = X.shape[1] - 1
     wcy = vy - fy
     wfy = 1 - wcy
 
     fz = torch.floor(vz).int()
     cz = fz + 1
-    cz[cz > (X.shape[2]-1)] = (X.shape[2]-1)
+    cz[cz > (X.shape[2] - 1)] = X.shape[2] - 1
     wcz = vz - fz
     wfz = 1 - wcz
 
-    Y = torch.zeros([newsize[0], newsize[1], newsize[2], X.shape[3]], dtype=torch.float, device=device)
+    Y = torch.zeros(
+        [newsize[0], newsize[1], newsize[2], X.shape[3]],
+        dtype=torch.float,
+        device=device,
+    )
 
     dtype = X.dtype
     for channel in range(X.shape[3]):
-        Xc = X[:,:,:,channel]
+        Xc = X[:, :, :, channel]
 
-        tmp1 = torch.zeros([newsize[0], Xc.shape[1], Xc.shape[2]], dtype=dtype, device=device)
+        tmp1 = torch.zeros(
+            [newsize[0], Xc.shape[1], Xc.shape[2]], dtype=dtype, device=device
+        )
         for i in range(newsize[0]):
-            tmp1[i, :, :] = wfx[i] * Xc[fx[i], :, :] +  wcx[i] * Xc[cx[i], :, :]
-        tmp2 = torch.zeros([newsize[0], newsize[1], Xc.shape[2]], dtype=dtype, device=device)
+            tmp1[i, :, :] = wfx[i] * Xc[fx[i], :, :] + wcx[i] * Xc[cx[i], :, :]
+        tmp2 = torch.zeros(
+            [newsize[0], newsize[1], Xc.shape[2]], dtype=dtype, device=device
+        )
         for j in range(newsize[1]):
-            tmp2[:, j, :] = wfy[j] * tmp1[:, fy[j], :] +  wcy[j] * tmp1[:, cy[j], :]
+            tmp2[:, j, :] = (
+                wfy[j] * tmp1[:, fy[j], :] + wcy[j] * tmp1[:, cy[j], :]
+            )
         for k in range(newsize[2]):
-            Y[:, :, k, channel] = wfz[k] * tmp2[:, :, fz[k]] +  wcz[k] * tmp2[:, :, cz[k]]
+            Y[:, :, k, channel] = (
+                wfz[k] * tmp2[:, :, fz[k]] + wcz[k] * tmp2[:, :, cz[k]]
+            )
 
     if Y.shape[3] == 1:
-        Y = Y[:,:,:, 0]
+        Y = Y[:, :, :, 0]
 
     if aff is not None:
         aff_new = aff.copy()
         for c in range(3):
             aff_new[:-1, c] = aff_new[:-1, c] / factors[c]
-        aff_new[:-1, -1] = aff_new[:-1, -1] - aff[:-1, :-1] @ (0.5 - 0.5 / factors)
+        aff_new[:-1, -1] = aff_new[:-1, -1] - aff[:-1, :-1] @ (
+            0.5 - 0.5 / factors
+        )
         return Y, aff_new
     else:
         return Y
 
-def torch_resize(I, aff, resolution, power_factor_at_half_width=5, dtype=torch.float32, slow=False):
+
+def torch_resize(
+    I,
+    aff,
+    resolution,
+    power_factor_at_half_width=5,
+    dtype=torch.float32,
+    slow=False,
+):
 
     if torch.is_grad_enabled():
         with torch.no_grad():
-            return torch_resize(I, aff, resolution, power_factor_at_half_width, dtype, slow)
+            return torch_resize(
+                I, aff, resolution, power_factor_at_half_width, dtype, slow
+            )
 
-    slow = slow or (I.device == 'cpu')
+    slow = slow or (I.device == "cpu")
     voxsize = np.sqrt(np.sum(aff[:-1, :-1] ** 2, axis=0))
     newsize = np.round(I.shape[0:3] * (voxsize / resolution)).astype(int)
     factors = np.array(I.shape[0:3]) / np.array(newsize)
     k = np.log(power_factor_at_half_width) / np.pi
     sigmas = k * factors
-    sigmas[sigmas<=k] = 0  
+    sigmas[sigmas <= k] = 0
 
     if len(I.shape) not in (3, 4):
-        raise Exception('torch_resize works with 3D or 3D+label volumes')
+        raise Exception("torch_resize works with 3D or 3D+label volumes")
     no_channels = len(I.shape) == 3
     if no_channels:
         I = I[:, :, :, None]
@@ -1113,18 +1492,23 @@ def torch_resize(I, aff, resolution, power_factor_at_half_width=5, dtype=torch.f
         # Smoothen if needed
         for d in range(3):
             It = It.permute([0, 1, 3, 4, 2])
-            if sigmas[d]>0:
+            if sigmas[d] > 0:
                 sl = np.ceil(sigmas[d] * 2.5).astype(int)
                 v = np.arange(-sl, sl + 1)
-                gauss = np.exp((-(v / sigmas[d]) ** 2 / 2))
+                gauss = np.exp((-((v / sigmas[d]) ** 2) / 2))
                 kernel = gauss / np.sum(gauss)
-                kernel = torch.tensor(kernel,  device=I.device, dtype=dtype)
+                kernel = torch.tensor(kernel, device=I.device, dtype=dtype)
                 if slow:
                     It = conv_slow_fallback(It, kernel)
                 else:
                     kernel = kernel[None, None, None, None, :]
-                    It = torch.conv3d(It, kernel, bias=None, stride=1, padding=[0, 0, int((kernel.shape[-1] - 1) / 2)])
-
+                    It = torch.conv3d(
+                        It,
+                        kernel,
+                        bias=None,
+                        stride=1,
+                        padding=[0, 0, int((kernel.shape[-1] - 1) / 2)],
+                    )
 
         It = torch.squeeze(It)
         It, aff2 = myzoom_torch_anisotropic(It, aff, newsize)
@@ -1155,19 +1539,20 @@ def torch_resize(I, aff, resolution, power_factor_at_half_width=5, dtype=torch.f
 
     return It_lowres, aff2
 
+
 ###############################
+
 
 @torch.jit.script
 def conv_slow_fallback(x, kernel):
     """1D Conv along the last dimension with padding"""
     y = torch.zeros_like(x)
-    x = torch.nn.functional.pad(x, [(len(kernel) - 1) // 2]*2)
+    x = torch.nn.functional.pad(x, [(len(kernel) - 1) // 2] * 2)
     x = x.unfold(-1, size=len(kernel), step=1)
     x = x.movedim(-1, 0)
     for i in range(len(kernel)):
         y = y.addcmul_(x[i], kernel[i])
     return y
-
 
 
 #######
@@ -1200,28 +1585,42 @@ def align_volume_to_ref(volume, aff, aff_ref=None, return_aff=False, n_dims=3):
         if ras_axes_flo[i] != ras_axes_ref[i]:
             volume = torch.swapaxes(volume, ras_axes_flo[i], ras_axes_ref[i])
             swapped_axis_idx = np.where(ras_axes_flo == ras_axes_ref[i])
-            ras_axes_flo[swapped_axis_idx], ras_axes_flo[i] = ras_axes_flo[i], ras_axes_flo[swapped_axis_idx]
+            ras_axes_flo[swapped_axis_idx], ras_axes_flo[i] = (
+                ras_axes_flo[i],
+                ras_axes_flo[swapped_axis_idx],
+            )
 
     # align directions
     dot_products = np.sum(aff_flo[:3, :3] * aff_ref[:3, :3], axis=0)
     for i in range(n_dims):
         if dot_products[i] < 0:
             volume = torch.flip(volume, [i])
-            aff_flo[:, i] = - aff_flo[:, i]
-            aff_flo[:3, 3] = aff_flo[:3, 3] - aff_flo[:3, i] * (volume.shape[i] - 1)
+            aff_flo[:, i] = -aff_flo[:, i]
+            aff_flo[:3, 3] = aff_flo[:3, 3] - aff_flo[:3, i] * (
+                volume.shape[i] - 1
+            )
 
     if return_aff:
         return volume, aff_flo
     else:
-        return volume 
+        return volume
 
 
-
-def multistep_scheduler(base_value, lr_drops, epochs, niter_per_ep, warmup_epochs=0, start_warmup_value=0, gamma=0.1):
+def multistep_scheduler(
+    base_value,
+    lr_drops,
+    epochs,
+    niter_per_ep,
+    warmup_epochs=0,
+    start_warmup_value=0,
+    gamma=0.1,
+):
     warmup_schedule = np.array([])
     warmup_iters = warmup_epochs * niter_per_ep
     if warmup_epochs > 0:
-        warmup_schedule = np.linspace(start_warmup_value, base_value, warmup_iters)
+        warmup_schedule = np.linspace(
+            start_warmup_value, base_value, warmup_iters
+        )
 
     schedule = np.ones(epochs * niter_per_ep - warmup_iters) * base_value
     for milestone in lr_drops:
@@ -1231,14 +1630,25 @@ def multistep_scheduler(base_value, lr_drops, epochs, niter_per_ep, warmup_epoch
     return schedule
 
 
-def cosine_scheduler(base_value, final_value, epochs, niter_per_ep, warmup_epochs=0, start_warmup_value=0):
+def cosine_scheduler(
+    base_value,
+    final_value,
+    epochs,
+    niter_per_ep,
+    warmup_epochs=0,
+    start_warmup_value=0,
+):
     warmup_schedule = np.array([])
     warmup_iters = warmup_epochs * niter_per_ep
     if warmup_epochs > 0:
-        warmup_schedule = np.linspace(start_warmup_value, base_value, warmup_iters)
+        warmup_schedule = np.linspace(
+            start_warmup_value, base_value, warmup_iters
+        )
 
     iters = np.arange(epochs * niter_per_ep - warmup_iters)
-    schedule = final_value + 0.5 * (base_value - final_value) * (1 + np.cos(np.pi * iters / len(iters)))
+    schedule = final_value + 0.5 * (base_value - final_value) * (
+        1 + np.cos(np.pi * iters / len(iters))
+    )
 
     schedule = np.concatenate((warmup_schedule, schedule))
     assert len(schedule) == epochs * niter_per_ep
@@ -1249,42 +1659,61 @@ class LARS(torch.optim.Optimizer):
     """
     Almost copy-paste from https://github.com/facebookresearch/barlowtwins/blob/main/main.py
     """
-    def __init__(self, params, lr=0, weight_decay=0, momentum=0.9, eta=0.001,
-                 weight_decay_filter=None, lars_adaptation_filter=None):
-        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum,
-                        eta=eta, weight_decay_filter=weight_decay_filter,
-                        lars_adaptation_filter=lars_adaptation_filter)
+
+    def __init__(
+        self,
+        params,
+        lr=0,
+        weight_decay=0,
+        momentum=0.9,
+        eta=0.001,
+        weight_decay_filter=None,
+        lars_adaptation_filter=None,
+    ):
+        defaults = dict(
+            lr=lr,
+            weight_decay=weight_decay,
+            momentum=momentum,
+            eta=eta,
+            weight_decay_filter=weight_decay_filter,
+            lars_adaptation_filter=lars_adaptation_filter,
+        )
         super().__init__(params, defaults)
 
     @torch.no_grad()
     def step(self):
         for g in self.param_groups:
-            for p in g['params']:
+            for p in g["params"]:
                 dp = p.grad
 
                 if dp is None:
                     continue
 
                 if p.ndim != 1:
-                    dp = dp.add(p, alpha=g['weight_decay'])
+                    dp = dp.add(p, alpha=g["weight_decay"])
 
                 if p.ndim != 1:
                     param_norm = torch.norm(p)
                     update_norm = torch.norm(dp)
                     one = torch.ones_like(param_norm)
-                    q = torch.where(param_norm > 0.,
-                                    torch.where(update_norm > 0,
-                                                (g['eta'] * param_norm / update_norm), one), one)
+                    q = torch.where(
+                        param_norm > 0.0,
+                        torch.where(
+                            update_norm > 0,
+                            (g["eta"] * param_norm / update_norm),
+                            one,
+                        ),
+                        one,
+                    )
                     dp = dp.mul(q)
 
                 param_state = self.state[p]
-                if 'mu' not in param_state:
-                    param_state['mu'] = torch.zeros_like(p)
-                mu = param_state['mu']
-                mu.mul_(g['momentum']).add_(dp)
+                if "mu" not in param_state:
+                    param_state["mu"] = torch.zeros_like(p)
+                mu = param_state["mu"]
+                mu.mul_(g["momentum"]).add_(dp)
 
-                p.add_(mu, alpha=-g['lr'])
-
+                p.add_(mu, alpha=-g["lr"])
 
 
 def cancel_gradients_last_layer(epoch, model, freeze_last_layer):
@@ -1307,18 +1736,19 @@ def clip_gradients(model, clip):
     return norms
 
 
-
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
     # Method based on https://people.sc.fsu.edu/~jburkardt/presentations/truncated_normal.pdf
     def norm_cdf(x):
         # Computes standard normal cumulative distribution function
-        return (1. + math.erf(x / math.sqrt(2.))) / 2.
+        return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
 
     if (mean < a - 2 * std) or (mean > b + 2 * std):
-        warnings.warn("mean is more than 2 std from [a, b] in nn.init.trunc_normal_. "
-                      "The distribution of values may be incorrect.",
-                      stacklevel=2)
+        warnings.warn(
+            "mean is more than 2 std from [a, b] in nn.init.trunc_normal_. "
+            "The distribution of values may be incorrect.",
+            stacklevel=2,
+        )
 
     with torch.no_grad():
         # Values are generated by using a truncated uniform distribution and
@@ -1336,26 +1766,30 @@ def _no_grad_trunc_normal_(tensor, mean, std, a, b):
         tensor.erfinv_()
 
         # Transform to proper mean, std
-        tensor.mul_(std * math.sqrt(2.))
+        tensor.mul_(std * math.sqrt(2.0))
         tensor.add_(mean)
 
         # Clamp to ensure it's in the proper range
         tensor.clamp_(min=a, max=b)
         return tensor
 
-def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
+
+def trunc_normal_(tensor, mean=0.0, std=1.0, a=-2.0, b=2.0):
     # type: (Tensor, float, float, float, float) -> Tensor
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
 
 
-
 def has_batchnorms(model):
-    bn_types = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm)
+    bn_types = (
+        nn.BatchNorm1d,
+        nn.BatchNorm2d,
+        nn.BatchNorm3d,
+        nn.SyncBatchNorm,
+    )
     for name, module in model.named_modules():
         if isinstance(module, bn_types):
             return True
     return False
-
 
 
 ###############################
@@ -1375,5 +1809,5 @@ right_to_left_dict = {
     53: 17,
     54: 18,
     58: 26,
-    60: 28
+    60: 28,
 }

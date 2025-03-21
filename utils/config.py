@@ -1,4 +1,3 @@
-
 """Config utilities for yml file."""
 
 import collections
@@ -7,6 +6,7 @@ import os
 import re
 
 import yaml
+
 # from imaginaire.utils.distributed import master_only_print as print
 
 
@@ -48,23 +48,23 @@ class AttrDict(dict):
         ret_str = []
         for key, value in self.__dict__.items():
             if isinstance(value, AttrDict):
-                ret_str.append('{}:'.format(key))
-                child_ret_str = value.__repr__().split('\n')
+                ret_str.append("{}:".format(key))
+                child_ret_str = value.__repr__().split("\n")
                 for item in child_ret_str:
-                    ret_str.append('    ' + item)
+                    ret_str.append("    " + item)
             elif isinstance(value, list):
                 if isinstance(value[0], AttrDict):
-                    ret_str.append('{}:'.format(key))
+                    ret_str.append("{}:".format(key))
                     for item in value:
                         # Treat as AttrDict above.
-                        child_ret_str = item.__repr__().split('\n')
+                        child_ret_str = item.__repr__().split("\n")
                         for item in child_ret_str:
-                            ret_str.append('    ' + item)
+                            ret_str.append("    " + item)
                 else:
-                    ret_str.append('{}: {}'.format(key, value))
+                    ret_str.append("{}: {}".format(key, value))
             else:
-                ret_str.append('{}: {}'.format(key, value))
-        return '\n'.join(ret_str)
+                ret_str.append("{}: {}".format(key, value))
+        return "\n".join(ret_str)
 
 
 class Config(AttrDict):
@@ -73,39 +73,42 @@ class Config(AttrDict):
 
     def __init__(self, filename=None, verbose=False):
         super(Config, self).__init__()
-
         # Update with given configurations.
         if os.path.exists(filename):
 
             loader = yaml.SafeLoader
             loader.add_implicit_resolver(
-                u'tag:yaml.org,2002:float',
-                re.compile(u'''^(?:
+                "tag:yaml.org,2002:float",
+                re.compile(
+                    """^(?:
                 [-+]?(?:[0-9][0-9_]*)\\.[0-9_]*(?:[eE][-+]?[0-9]+)?
                 |[-+]?(?:[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)
                 |\\.[0-9_]+(?:[eE][-+][0-9]+)?
                 |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\\.[0-9_]*
                 |[-+]?\\.(?:inf|Inf|INF)
-                |\\.(?:nan|NaN|NAN))$''', re.X),
-                list(u'-+0123456789.'))
+                |\\.(?:nan|NaN|NAN))$""",
+                    re.X,
+                ),
+                list("-+0123456789."),
+            )
             try:
-                with open(filename, 'r') as f:
+                with open(filename, "r") as f:
                     cfg_dict = yaml.load(f, Loader=loader)
             except EnvironmentError:
                 print('Please check the file with name of "%s"', filename)
             recursive_update(self, cfg_dict)
         else:
-            raise ValueError('Provided config path not existed: %s' % filename)
+            raise ValueError("Provided config path not existed: %s" % filename)
 
         if verbose:
-            print(' imaginaire config '.center(80, '-'))
+            print(" imaginaire config ".center(80, "-"))
             print(self.__repr__())
-            print(''.center(80, '-'))
+            print("".center(80, "-"))
 
 
 def rsetattr(obj, attr, val):
     """Recursively find object and set value"""
-    pre, _, post = attr.rpartition('.')
+    pre, _, post = attr.rpartition(".")
     return setattr(rgetattr(obj, pre) if pre else obj, post, val)
 
 
@@ -116,7 +119,7 @@ def rgetattr(obj, attr, *args):
         r"""Get attribute."""
         return getattr(obj, attr, *args)
 
-    return functools.reduce(_getattr, [obj] + attr.split('.'))
+    return functools.reduce(_getattr, [obj] + attr.split("."))
 
 
 def recursive_update(d, u):
@@ -124,7 +127,9 @@ def recursive_update(d, u):
     if u is not None:
         for key, value in u.items():
             if isinstance(value, collections.abc.Mapping):
-                d.__dict__[key] = recursive_update(d.get(key, AttrDict({})), value)
+                d.__dict__[key] = recursive_update(
+                    d.get(key, AttrDict({})), value
+                )
             elif isinstance(value, (list, tuple)):
                 if len(value) > 0 and isinstance(value[0], dict):
                     d.__dict__[key] = [AttrDict(item) for item in value]
