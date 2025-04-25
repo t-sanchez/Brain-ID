@@ -21,9 +21,6 @@ train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/confi
 
 batch_size: 1
 
-#mild_samples: 2
-all_samples: 4
-
 train_patch: True
 patch_size: 96
 patch_boundary: 0

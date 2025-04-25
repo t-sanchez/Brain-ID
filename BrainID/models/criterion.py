@@ -321,7 +321,7 @@ class SetMultiCriterion(SetCriterion):
         super(SetMultiCriterion, self).__init__(
             args, weight_dict, loss_names, device
         )
-        self.all_samples = args.all_samples
+        self.all_samples = args.fetalsyngen.n_mild_samples + args.fetalsyngen.n_severe_samples
 
     def get_loss(self, loss_name, outputs_list, targets, samples_list):
         assert (

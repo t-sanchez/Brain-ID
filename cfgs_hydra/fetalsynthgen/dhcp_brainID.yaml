@@ -97,8 +97,8 @@ generator_params:
     bdr_prob_fuzzy: 0.5
     # max_surf_distance: 2.0 # clamp at plus / minus this number (both the ground truth and the prediction)
 
-  n_samples: 3
-  n_mild_samples: 1
+  n_samples: 6
+  n_mild_samples: 4
   mild_generator: 
     bf_scale_min: 0.01
     bf_scale_max: 0.02

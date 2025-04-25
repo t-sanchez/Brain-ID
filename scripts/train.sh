@@ -15,9 +15,11 @@
 
 
 # exp-specific cfg #
-exp_cfg_file=cfgs/train/anat.yaml
+exp_cfg_file=train_feature_fetal
 
+# Get the current time from command line
+# Get the current date and time
 
-date;hostname;pwd
-python scripts/train_fetal.py $exp_cfg_file 
+echo python scripts/train_feature_fetal.py --config-name $exp_cfg_file
+python scripts/train_feature_fetal.py --config-name $exp_cfg_file 
 date

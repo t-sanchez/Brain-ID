@@ -37,6 +37,8 @@ from torch import Tensor
 from visdom import Visdom
 from types import SimpleNamespace
 from omegaconf import DictConfig, ListConfig
+import datetime
+import pytz
 
 logger = logging.get_logger(__name__)
 
@@ -73,6 +75,19 @@ def dictconfig_to_namespace(cfg: DictConfig) -> SimpleNamespace:
 """if float(torchvision.__version__[:3]) < 0.7:
     from torchvision.ops import _new_empty_tensor
     from torchvision.ops.misc import _output_size"""
+
+
+
+def get_output_dir(cfg):
+    tz_CH = pytz.timezone("Europe/Zurich")
+    out_dir = os.path.join(
+        cfg.out_dir,
+        "Test",
+        cfg.exp_name,
+        cfg.job_name,
+        datetime.datetime.now(tz_CH).strftime("%m%d-%H%M"),
+    )
+    return out_dir
 
 
 def make_dir(dir_name, parents=True, exist_ok=True):

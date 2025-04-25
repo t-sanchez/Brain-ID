@@ -178,14 +178,11 @@ def train_one_epoch_feature(
     )
 
     header = "Epoch: [{}/{}]".format(epoch, args.n_epochs)
-
     for itr, (subjects, samples) in enumerate(
         metric_logger.log_every(
             data_loader,
             epoch,
             header=header,
-            dataset_name=args.dataset,
-            modality=args.modality,
             train_limit=args.train_itr_limit,
         )
     ):
@@ -198,7 +195,6 @@ def train_one_epoch_feature(
 
         samples = utils.nested_dict_to_device(samples, device)
         subjects = utils.nested_dict_to_device(subjects, device)
-
         outputs, _ = model(samples)
         for processor in processors:
             outputs = processor(outputs, samples)
@@ -322,7 +318,7 @@ def train_one_epoch_downstream(
 
     header = "Epoch: [{}/{}]".format(epoch, args.n_epochs)
     step_logger = PredictionLoggerQC()
-
+    
     for itr, (subjects, samples) in enumerate(
         metric_logger.log_every(
             data_loader,

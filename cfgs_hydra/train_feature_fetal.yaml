@@ -1,9 +1,8 @@
 defaults:
-  - fetalsynthgen/dhcp_onlinesynth
+  - fetalsyngen/synth_train
   - default_train
-  - default_dataset
-  - default_val
-  #- submit
+#  - default_val
+#  #- submit
   - _self_
   
 ## job specific set ups ##
@@ -31,12 +30,10 @@ ckp_path:
 
 batch_size: 1
 
-#mild_samples: 2
-all_samples: 4
 
 train_patch: True
-patch_size: 96
-patch_boundary: 0
-patch_per_subject: 6
+patch_size: 128
+patch_boundary: 20
+patch_per_subject: 3
 #log_itr: 20
 #vis_itr: 1
