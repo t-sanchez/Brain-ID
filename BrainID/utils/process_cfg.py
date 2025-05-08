@@ -4,7 +4,7 @@ import os
 import pytz
 from datetime import datetime
 
-from utils.config import Config
+from BrainID.utils.config import Config
 
 
 def build_out_dir(cfg, exp_name="", job_name=""):

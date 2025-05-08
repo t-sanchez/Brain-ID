@@ -1,4 +1,3 @@
-
 """
 Evaluator modules
 """
@@ -12,7 +11,7 @@ import torch.nn as nn
 from pytorch_msssim import ssim, ms_ssim 
 
 
-from utils.misc import MRIread, MRIwrite
+from BrainID.utils.misc import MRIread, MRIwrite
 
 
 #########################################
@@ -49,7 +48,6 @@ def align_shape(nda1, nda2):
         nda2 = nda2[:s, :r, :c]
         print('post-align', nda1.shape, nda2.shape)
     return nda1, nda2
-
 
 
 class Evaluator:
@@ -190,5 +188,3 @@ class Evaluator:
             score.update(self.get_score(metric_name, pred, target, **kwargs))
         
         return score
-
-

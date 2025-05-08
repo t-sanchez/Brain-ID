@@ -1,0 +1,27 @@
+defaults:
+  - generator_mild
+bias_field:
+  scale_min: 0.01
+  scale_max: 0.04
+  std_min: 0.2
+  std_max: 0.3
+gamma:
+  gamma_std: 0.1
+blur_cortex:
+  nblur_min: 150
+  nblur_max: 200
+struct_noise:
+  std_min: 0.5
+  std_max: 0.7
+  merge_params:
+     perlin_increase_size: 0.5
+simulate_motion:
+  recon_params:
+    prob_merge: 0.5
+    merge_params:
+      perlin_increase_size: 0.5
+
+
+
+
+

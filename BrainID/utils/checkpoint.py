@@ -7,9 +7,9 @@ import os
 import torch
 import torch.nn as nn
 
-import utils.distributed as du
-import utils.logging as logging
-from utils.env import checkpoint_pathmgr as pathmgr
+import BrainID.utils.distributed as du
+import BrainID.utils.logging as logging
+from BrainID.utils.env import checkpoint_pathmgr as pathmgr
 
 from tabulate import tabulate
 

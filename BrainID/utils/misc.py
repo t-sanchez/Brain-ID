@@ -18,11 +18,11 @@ import nibabel as nib
 from pathlib import Path
 import SimpleITK as sitk
 
-import utils.logging as logging
-import utils.multiprocessing as mpu
+import BrainID.utils.logging as logging
+import BrainID.utils.multiprocessing as mpu
 
 # from utils.process_cfg import load_config
-from utils.process_cfg import build_out_dir
+from BrainID.utils.process_cfg import build_out_dir
 from collections import defaultdict, deque
 
 
@@ -75,7 +75,6 @@ def dictconfig_to_namespace(cfg: DictConfig) -> SimpleNamespace:
 """if float(torchvision.__version__[:3]) < 0.7:
     from torchvision.ops import _new_empty_tensor
     from torchvision.ops.misc import _output_size"""
-
 
 
 def get_output_dir(cfg):
@@ -1620,115 +1619,6 @@ def align_volume_to_ref(volume, aff, aff_ref=None, return_aff=False, n_dims=3):
     else:
         return volume
 
-
-def multistep_scheduler(
-    base_value,
-    lr_drops,
-    epochs,
-    niter_per_ep,
-    warmup_epochs=0,
-    start_warmup_value=0,
-    gamma=0.1,
-):
-    warmup_schedule = np.array([])
-    warmup_iters = warmup_epochs * niter_per_ep
-    if warmup_epochs > 0:
-        warmup_schedule = np.linspace(
-            start_warmup_value, base_value, warmup_iters
-        )
-
-    schedule = np.ones(epochs * niter_per_ep - warmup_iters) * base_value
-    for milestone in lr_drops:
-        schedule[milestone * niter_per_ep :] *= gamma
-    schedule = np.concatenate((warmup_schedule, schedule))
-    assert len(schedule) == epochs * niter_per_ep
-    return schedule
-
-
-def cosine_scheduler(
-    base_value,
-    final_value,
-    epochs,
-    niter_per_ep,
-    warmup_epochs=0,
-    start_warmup_value=0,
-):
-    warmup_schedule = np.array([])
-    warmup_iters = warmup_epochs * niter_per_ep
-    if warmup_epochs > 0:
-        warmup_schedule = np.linspace(
-            start_warmup_value, base_value, warmup_iters
-        )
-
-    iters = np.arange(epochs * niter_per_ep - warmup_iters)
-    schedule = final_value + 0.5 * (base_value - final_value) * (
-        1 + np.cos(np.pi * iters / len(iters))
-    )
-
-    schedule = np.concatenate((warmup_schedule, schedule))
-    assert len(schedule) == epochs * niter_per_ep
-    return schedule
-
-
-class LARS(torch.optim.Optimizer):
-    """
-    Almost copy-paste from https://github.com/facebookresearch/barlowtwins/blob/main/main.py
-    """
-
-    def __init__(
-        self,
-        params,
-        lr=0,
-        weight_decay=0,
-        momentum=0.9,
-        eta=0.001,
-        weight_decay_filter=None,
-        lars_adaptation_filter=None,
-    ):
-        defaults = dict(
-            lr=lr,
-            weight_decay=weight_decay,
-            momentum=momentum,
-            eta=eta,
-            weight_decay_filter=weight_decay_filter,
-            lars_adaptation_filter=lars_adaptation_filter,
-        )
-        super().__init__(params, defaults)
-
-    @torch.no_grad()
-    def step(self):
-        for g in self.param_groups:
-            for p in g["params"]:
-                dp = p.grad
-
-                if dp is None:
-                    continue
-
-                if p.ndim != 1:
-                    dp = dp.add(p, alpha=g["weight_decay"])
-
-                if p.ndim != 1:
-                    param_norm = torch.norm(p)
-                    update_norm = torch.norm(dp)
-                    one = torch.ones_like(param_norm)
-                    q = torch.where(
-                        param_norm > 0.0,
-                        torch.where(
-                            update_norm > 0,
-                            (g["eta"] * param_norm / update_norm),
-                            one,
-                        ),
-                        one,
-                    )
-                    dp = dp.mul(q)
-
-                param_state = self.state[p]
-                if "mu" not in param_state:
-                    param_state["mu"] = torch.zeros_like(p)
-                mu = param_state["mu"]
-                mu.mul_(g["momentum"]).add_(dp)
-
-                p.add_(mu, alpha=-g["lr"])
 
 
 def cancel_gradients_last_layer(epoch, model, freeze_last_layer):

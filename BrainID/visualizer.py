@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from PIL import Image
 from collections import defaultdict
 
-from utils.misc import make_dir
+from BrainID.utils.misc import make_dir
 
 
 def match_shape(array, shape):

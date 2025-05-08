@@ -5,44 +5,41 @@ Criterion modules.
 import numpy as np
 import torch
 import torch.nn as nn
-
+import pdb
 from BrainID.models.losses import GradientLoss, gaussian_loss, laplace_loss
-
+from monai.losses import DiceCELoss
 
 uncertainty_loss = {"gaussian": gaussian_loss, "laplace": laplace_loss}
 
 
 class SetScalarCriterion(nn.Module):
 
-    def __init__(self, args, weight_dict, loss_names, device):
+    def __init__(self, loss_dict, device):
         super(SetScalarCriterion, self).__init__()
-        self.args = args
-        self.weight_dict = weight_dict
-        self.loss_names = loss_names
+        # self.args = args
+        self.weight_dict = loss_dict
+        self.loss_names = list(loss_dict.keys())
 
-        self.loss_map = {}
-        self.ce = nn.CrossEntropyLoss(
-            weight=torch.tensor(args.losses.loss_weights_ce)
-        )
+        self.loss_map = {
+            "l1": self.loss_l1,
+            "l2": self.loss_l2,
+            "ce": self.loss_ce,
+        }
+        self.ce = nn.CrossEntropyLoss()
         self.l1 = nn.L1Loss()
         self.l2 = nn.MSELoss()
-        if args.losses.loss_regression:
-            self.loss_map["l1"] = self.loss_l1
-            self.loss_map["l2"] = self.loss_l2
-        else:
-            self.loss_map["ce"] = self.loss_ce
         self.device = device
 
     def loss_ce(self, outputs, targets, *kwargs):
-        loss_ce = self.ce(outputs["scalar"], targets["target"].to(self.device))
+        loss_ce = self.ce(outputs["pred"], targets["label"].to(self.device))
         return {"loss_ce": loss_ce}
 
     def loss_l1(self, outputs, targets, *kwargs):
-        loss_l1 = self.l1(outputs["scalar"], targets["target"].to(self.device))
+        loss_l1 = self.l1(outputs["pred"], targets["label"].to(self.device))
         return {"loss_l1": loss_l1}
 
     def loss_l2(self, outputs, targets, *kwargs):
-        loss_l2 = self.l2(outputs["scalar"], targets["target"].to(self.device))
+        loss_l2 = self.l2(outputs["pred"], targets["label"].to(self.device))
         return {"loss_l2": loss_l2}
 
     def get_loss(self, loss_name, outputs_list, targets, samples_list):
@@ -56,13 +53,27 @@ class SetScalarCriterion(nn.Module):
             )["loss_" + loss_name]
         return {"loss_" + loss_name: total_loss / len(outputs_list)}
 
-    def forward(self, outputs_list, targets, *kwargs):
+    def get_losses(self, outputs, targets, *kwargs):
         losses = {}
         for loss_name in self.loss_names:
             losses.update(
-                self.get_loss(loss_name, outputs_list, targets, *kwargs)
+                self.get_loss(loss_name, outputs, targets, *kwargs)
             )
         return losses
+    
+    def aggregate_losses(self, losses_dict):
+        weight_dict = {"loss_" + k: v for k, v in self.weight_dict.items()}
+        losses = sum(
+            losses_dict[k] * weight_dict[k]
+            for k in losses_dict.keys()
+            if k in weight_dict
+        )
+        return losses
+    
+    def forward(self, outputs_list, targets, *kwargs):
+        losses_dict = self.get_losses(outputs_list, targets, *kwargs)
+        loss = self.aggregate_losses(losses_dict)
+        return loss
 
 
 class SetCriterion(nn.Module):
@@ -70,30 +81,33 @@ class SetCriterion(nn.Module):
     This class computes the loss for BrainID.
     """
 
-    def __init__(self, args, weight_dict, loss_names, device):
+    def __init__(self, loss_dict, params_dict, device):
         """Create the criterion.
         Parameters:
             args: general exp cfg
-            weight_dict: dict containing as key the names of the losses and as values their
+            loss_weights: dict containing as key the names of the losses and as values their
                          relative weight.
             loss_names: list of all the losses to be applied. See get_loss for list of
                     available loss_names.
         """
         super(SetCriterion, self).__init__()
-        self.args = args
-        self.weight_dict = weight_dict
-        self.loss_names = loss_names
-
+        self.weight_dict = loss_dict
+        self.loss_names = list(loss_dict.keys())
         self.mse = nn.MSELoss()
+        self.dice_ce = DiceCELoss(
+            include_background=False,
+            to_onehot_y=True,
+            softmax=True,
+        )
 
         self.loss_regression_type = (
-            args.losses.uncertainty
-            if args.losses.uncertainty is not None
+            params_dict.uncertainty
+            if params_dict.uncertainty is not None
             else "l1"
         )
         self.loss_regression = (
-            uncertainty_loss[args.losses.uncertainty]
-            if args.losses.uncertainty is not None
+            uncertainty_loss[params_dict.uncertainty]
+            if params_dict.uncertainty is not None
             else nn.L1Loss()
         )
 
@@ -101,53 +115,19 @@ class SetCriterion(nn.Module):
 
         self.bflog_loss = (
             nn.L1Loss()
-            if args.losses.bias_field_log_type == "l1"
+            if params_dict.bias_field_log_type == "l1"
             else self.mse
         )
 
         if "contrastive" in self.loss_names:
-            self.temp_alpha = args.contrastive_temperatures.alpha
-            self.temp_beta = args.contrastive_temperatures.beta
-            self.temp_gamma = args.contrastive_temperatures.gamma
-
-        # initialize weights
-
-        # weights_with_csf = torch.ones(args.n_labels_with_csf).to(device)
-        # weights_with_csf[
-        #     args.base_generator.label_list_segmentation_with_csf == 77
-        # ] = args.relative_weight_lesions  # give (more) importance to lesions
-        # weights_with_csf = weights_with_csf / torch.sum(weights_with_csf)
-
-        # weights_without_csf = torch.ones(args.n_labels_without_csf).to(device)
-        # weights_without_csf[
-        #     args.base_generator.label_list_segmentation_without_csf == 77
-        # ] = args.relative_weight_lesions  # give (more) importance to lesions
-        # weights_without_csf = weights_without_csf / torch.sum(
-        #     weights_without_csf
-        # )
-
-        # self.weights_ce = weights_with_csf[None, :, None, None, None]
-        # self.weights_dice = weights_with_csf[None, :]
-        # self.weights_dice_sup = weights_without_csf[None, :]
-
-        # self.csf_ind = torch.tensor(
-        #     np.where(
-        #         np.array(args.base_generator.label_list_segmentation_with_csf)
-        #         == 24
-        #     )[0][0]
-        # )
-        # self.csf_v = torch.tensor(
-        #     np.concatenate(
-        #         [
-        #             np.arange(0, self.csf_ind),
-        #             np.arange(self.csf_ind + 1, args.n_labels_with_csf),
-        #         ]
-        #     )
-        # )
+            self.temp_alpha = params_dict.contrastive_temperatures.alpha
+            self.temp_beta = params_dict.contrastive_temperatures.beta
+            self.temp_gamma = params_dict.contrastive_temperatures.gamma
 
         self.loss_map = {
-            "seg_ce": self.loss_seg_ce,
-            "seg_dice": self.loss_seg_dice,
+            #"seg_ce": self.loss_seg_ce,
+            #"seg_dice": self.loss_seg_dice,
+            "seg_dice_ce": self.loss_seg_dice_ce,
             "dist": self.loss_dist,
             "sr": self.loss_sr,
             "sr_grad": self.loss_sr_grad,
@@ -183,33 +163,30 @@ class SetCriterion(nn.Module):
         """
         Cross entropy of segmentation
         """
+        nlabels = torch.unique(targets["label"][targets["label" > 0]])
+        nlabels = nlabels[nlabels != 0]
+
         loss_seg_ce = torch.mean(
             -torch.sum(
                 torch.log(torch.clamp(outputs["seg"], min=1e-5))
                 * self.weights_ce
-                * targets["seg"],
+                * targets["label"],
                 dim=1,
             )
         )
         return {"loss_seg_ce": loss_seg_ce}
 
-    def loss_seg_dice(self, outputs, targets, *kwargs):
+    def loss_seg_dice_ce(self, outputs, targets, *kwargs):
         """
         Dice of segmentation
         """
-        loss_seg_dice = torch.sum(
-            self.weights_dice
-            * (
-                1.0
-                - 2.0
-                * ((outputs["seg"] * targets["seg"]).sum(dim=[2, 3, 4]))
-                / torch.clamp(
-                    (outputs["seg"] + targets["seg"]).sum(dim=[2, 3, 4]),
-                    min=1e-5,
-                )
-            )
+
+        loss_seg_dice_ce = self.dice_ce(
+            outputs["seg"],
+            targets["label"]
         )
-        return {"loss_seg_dice": loss_seg_dice}
+        return {"loss_seg_dice_ce": loss_seg_dice_ce}
+
 
     def loss_dist(self, outputs, targets, *kwargs):
         loss_dist = self.mse(outputs["dist"], targets["dist"])
@@ -289,6 +266,23 @@ class SetCriterion(nn.Module):
         ), f"do you really want to compute {loss_name} loss?"
         return self.loss_map[loss_name](outputs, targets, *kwargs)
 
+    def get_losses(self, outputs, targets, *kwargs):
+        losses = {}
+        for loss_name in self.loss_names:
+            losses.update(
+                self.get_loss(loss_name, outputs, targets, *kwargs)
+            )
+        return losses
+
+    def aggregate_losses(self, losses_dict):
+        weight_dict = {"loss_" + k: v for k, v in self.weight_dict.items()}
+        losses = sum(
+            losses_dict[k] * weight_dict[k]
+            for k in losses_dict.keys()
+            if k in weight_dict
+        )
+        return losses
+
     def forward(self, outputs, targets, *kwargs):
         """This performs the loss computation.
         Parameters:
@@ -297,11 +291,10 @@ class SetCriterion(nn.Module):
                       The expected keys in each dict depends on the losses applied,
                       see each loss' doc
         """
-        # Compute all the requested losses
-        losses = {}
-        for loss_name in self.loss_names:
-            losses.update(self.get_loss(loss_name, outputs, targets, *kwargs))
-        return losses
+
+        losses_dict = self.get_losses(outputs, targets, *kwargs)
+        loss = self.aggregate_losses(losses_dict)
+        return loss
 
 
 class SetMultiCriterion(SetCriterion):
@@ -309,7 +302,7 @@ class SetMultiCriterion(SetCriterion):
     This class computes the loss for BrainID with a list of results as inputs.
     """
 
-    def __init__(self, args, weight_dict, loss_names, device):
+    def __init__(self, loss_dict, params_dict, device):
         """Create the criterion.
         Parameters:
             args: general exp cfg
@@ -318,23 +311,22 @@ class SetMultiCriterion(SetCriterion):
             loss_names: list of all the losses to be applied. See get_loss for list of
                     available loss_names.
         """
-        super(SetMultiCriterion, self).__init__(
-            args, weight_dict, loss_names, device
-        )
-        self.all_samples = args.fetalsyngen.n_mild_samples + args.fetalsyngen.n_severe_samples
+        super(SetMultiCriterion, self).__init__(loss_dict, params_dict, device)
+        
 
     def get_loss(self, loss_name, outputs_list, targets, samples_list):
         assert (
             loss_name in self.loss_map
         ), f"do you really want to compute {loss_name} loss?"
         total_loss = 0.0
+        all_samples = len(outputs_list)
         for i_sample, outputs in enumerate(outputs_list):
             total_loss += self.loss_map[loss_name](
                 outputs, targets, samples_list[i_sample]
-            )["loss_" + loss_name]
-        return {"loss_" + loss_name: total_loss / self.all_samples}
+            )["loss_"+loss_name]
+        return {"loss_" + loss_name: total_loss / all_samples}
 
-    def forward(self, outputs_list, targets, samples_list):
+    def get_losses(self, outputs_list, targets, samples_list):
         """This performs the loss computation.
         Parameters:
              outputs: dict of tensors, see the output specification of the model for the format
@@ -349,3 +341,15 @@ class SetMultiCriterion(SetCriterion):
                 self.get_loss(loss_name, outputs_list, targets, samples_list)
             )
         return losses
+
+    def forward(self, outputs_list, targets, samples_list):
+        """This performs the loss computation.
+        Parameters:
+             outputs: dict of tensors, see the output specification of the model for the format
+             targets: list of dicts, such that len(targets) == batch_size.
+                      The expected keys in each dict depends on the losses applied,
+                      see each loss' doc
+        """
+        losses_dict = self.get_losses(outputs_list, targets, samples_list)
+        loss = self.aggregate_losses(losses_dict)
+        return loss

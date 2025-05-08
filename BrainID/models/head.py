@@ -14,7 +14,6 @@ class IndepHead(nn.Module):
 
     def __init__(
         self,
-        args,
         f_maps_list,
         out_channels,
         is_3d,
@@ -23,7 +22,6 @@ class IndepHead(nn.Module):
     ):
         super(IndepHead, self).__init__()
         self.out_feat_level = out_feat_level
-
         layers = (
             []
         )  # additional layers (same-size-output 3x3 conv) before final_conv, if len( f_maps_list ) > 1
@@ -320,22 +318,26 @@ def get_layers_fn(is_3d, norm="batch"):
 
 
 class ConvNormPoolBlock(nn.Module):
+
     def __init__(
         self,
         in_channels,
         out_channels,
         is_3d=True,
-        kernel=2,
-        stride=2,
+        conv_kernel=3,
+        conv_padding=1,
+        conv_stride=1,
+        pool_kernel=2,
+        pool_stride=2,
         norm="instance",
     ):
         super().__init__()
         conv, norm, pool = get_layers_fn(is_3d, norm)
         self.block = nn.Sequential(
-            conv(in_channels, out_channels, 3, padding=1),
+            conv(in_channels, out_channels, conv_kernel, stride=conv_stride, padding=conv_padding),
             norm(out_channels),
             nn.ReLU(),
-            pool(kernel, stride),
+            pool(kernel_size=pool_kernel, stride=pool_stride),
         )
 
     def forward(self, x):
@@ -359,7 +361,7 @@ class FCDropout(nn.Module):
 
     def __init__(self, n_input, output_size, fc_maps_list, dropout=0.5):
         super().__init__()
-        fc_maps_list = [n_input] + fc_maps_list
+        fc_maps_list = [n_input] + list(fc_maps_list)
         self.fc = [nn.Flatten()]
         for i, features in enumerate(fc_maps_list[:-1]):
             self.fc.append(
@@ -383,7 +385,6 @@ class ScalarHead(nn.Module):
 
     def __init__(
         self,
-        args,
         in_shape,
         n_classes,
         out_channels,
@@ -393,6 +394,9 @@ class ScalarHead(nn.Module):
         dropout=0.5,
         contrast_dependent=True,
         out_feat_level=-1,
+        conv_kernel=3,
+        conv_padding=1,
+        conv_stride=1,
         pool_kernel_stride=2,
         *kwargs,
     ):
@@ -408,8 +412,11 @@ class ScalarHead(nn.Module):
                 in_feature_num,
                 f_maps_list[i + 1],
                 is_3d=is_3d,
-                kernel=pool_kernel_stride,
-                stride=pool_kernel_stride,
+                conv_kernel=conv_kernel,
+                conv_padding=conv_padding,
+                conv_stride=conv_stride,
+                pool_kernel=pool_kernel_stride,
+                pool_stride=pool_kernel_stride,
             )
             layers.append(layer)
         self.layers = nn.Sequential(*layers)
@@ -417,7 +424,7 @@ class ScalarHead(nn.Module):
         n_input_fc = f_maps_list[-1] * np.prod(
             [
                 np.array(in_shape[-3:])
-                // (pool_kernel_stride ** (len(f_maps_list) - 1))
+                // ((pool_kernel_stride * conv_stride) ** (len(f_maps_list) - 1))
             ]
         )
 
@@ -440,7 +447,6 @@ class ScalarHead(nn.Module):
         assert (
             list(x.shape[-3:]) == self.in_shape[-3:]
         ), f"Input shape mismatch: expected {self.in_shape[-3:]} but got {x.shape[-3:]}."
-        # pdb.set_trace()
         if self.contrast_dependent:
             x = torch.cat([x, image], dim=1)
         x = self.layers(x)

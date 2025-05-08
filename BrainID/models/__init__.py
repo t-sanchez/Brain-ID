@@ -10,7 +10,7 @@ from .criterion import *
 from .evaluator import Evaluator
 from .head import get_head
 from .joiner import get_processors, get_joiner
-import utils.misc as utils
+import BrainID.utils.misc as utils
 
 
 #########################################
@@ -157,7 +157,7 @@ def get_criterion(args, task, device):
     loss_names = []
     weight_dict = {}
     if "qc" in task:
-        # scalar_loss
+
         loss_names += ["ce"]
         weight_dict["loss_ce"] = args.weights.qc_ce
         return SetScalarCriterion(
@@ -209,8 +209,7 @@ def get_criterion(args, task, device):
 
     criterion = SetMultiCriterion(
         args=args,
-        weight_dict=weight_dict,
-        loss_names=loss_names,
+        loss_weights=weight_dict,
         device=device,
     )
 
@@ -291,9 +290,10 @@ def build_schedulers(args, itr_per_epoch, lr, min_lr):
 ############################################
 
 
-def build_feat_model(args, device="cpu"):
+def build_feat_model(args):
+    device = args.device
     args = process_args(args, task=args.task)
-
+    
     backbone = build_backbone(args)
     head = get_head(args, args.task_f_maps, args.out_channels, True, -1)
     model = get_joiner(args.task, backbone, head)

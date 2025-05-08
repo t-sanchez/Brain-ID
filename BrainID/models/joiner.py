@@ -82,25 +82,25 @@ class MultiJoiner(nn.Module):
 
     def forward(self, input_list):
         outs = []
-
+        if not isinstance(input_list, list):
+            input_list = [input_list]
         for x in input_list:
             if self.freeze_feat:
                 with torch.no_grad():
-                    feat = self.backbone.get_feature(x["input"])
+                    feat = self.backbone.get_feature(x)
             else:
-                feat = self.backbone.get_feature(x["input"])
+                feat = self.backbone.get_feature(x)
             out = {"feat": feat}
             if self.head is not None:
-
                 head_input = self.format_head_input(feat, x)
                 out.update(self.head(*head_input))
             outs.append(out)
-        return outs, [input["input"] for input in input_list]
+        return outs, x
 
-    def train(self):
-        self.backbone.train()
+    def train(self, mode=True):
+        self.backbone.train(mode)
         if self.head is not None:
-            self.head.train()
+            self.head.train(mode)
 
     def eval(self):
         self.backbone.eval()
@@ -131,7 +131,7 @@ class MultiInputDepJoiner(MultiJoiner):
         super(MultiInputDepJoiner, self).__init__(backbone, head, freeze_feat)
 
     def pick_head_input(self, feat, x):
-        return feat, x["input"]
+        return feat, x
 
 
 ################################

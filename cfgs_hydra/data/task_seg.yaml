@@ -1,0 +1,19 @@
+defaults:
+  - generator: generator_mild
+  - transforms: inference
+  
+_target_: BrainID.datasets.dataloader.SegDataModule
+
+split_file: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled0p5/splits.csv
+bids_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled0p5
+seed_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/seeds0p5
+
+train_type: "synth"
+train_split: "train"
+
+val_type: "synth"
+val_split: "val"
+test_split: 
+
+num_workers: 1
+batch_size: 1

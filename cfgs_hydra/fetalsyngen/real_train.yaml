@@ -1,0 +1,9 @@
+defaults:
+  - generator/default
+
+_target_: fetalsyngen.data.datasets.FetalSynthDataset
+bids_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled0p5
+seed_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/seeds0p5
+sub_list: null
+load_image: True
+image_as_intensity: True

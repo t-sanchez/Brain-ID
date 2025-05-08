@@ -1,38 +1,35 @@
 defaults:
-  - data: default
-  - model: model
+  - data: task_seg
+  - model: seg_model
   - paths: default
   - trainer: default
   - logger: wandb
-  - callbacks: default
 #  - default_val
+  - callbacks: task_seg
+  - hydra: default
 #  #- submit
   - _self_
   
 ## job specific set ups ##
-job_name: anat-uncertainty
-exp_name: feat-anat
-#init_method: "tcp://localhost:9992"
+job_name: seg_run
+exp_name: seg
 
 device: "cuda:0"
 device_generator:
 num_workers: 1
 
-task: feat-anat
-dataset_name: {'train': 'synth_id', 'test': 'real_dataset'}
-
 eval_only: False 
 debug: False 
-freeze_feat: False
 
 resume: False
 reset_epoch: False 
 resume_optim: True
-ckpt_path: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
+resume_lr_scheduler: True
+freeze_feat: False
+feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
 #train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 
-#lr_drops: [70,85]
-
+## paths 
 out_dir: outs/BrainID
 
 
@@ -40,15 +37,13 @@ supervised_seg_cnn_weights:
 feat_ext_ckp_path:
 ckp_path:
 
-## losses and weights
-
 ## training params
 start_epoch: 0
 train_itr_limit: # if not None, it sets the max itr per epoch 
 train_subset: #0.2
 
-resume_lr_scheduler: True
 n_epochs: 400
+
 
 ## testing params
 test_itr_limit: 
@@ -62,6 +57,13 @@ world_size: 1
 # url used to set up distributed training
 dist_url: env://
 
+
 ## logging intervals
 val_epoch: 100000 # must be multiplicable by save_model_epoch
 
+log_itr: 50
+vis_itr: 5000
+
+
+#log_itr: 20
+#vis_itr: 1

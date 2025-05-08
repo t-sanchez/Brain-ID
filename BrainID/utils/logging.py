@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """Logging."""
- 
+
 import atexit
 import builtins
 import decimal
@@ -12,10 +12,9 @@ import sys
 
 import simplejson
 
-import utils.distributed as du
-from utils.env import pathmgr  
+import BrainID.utils.distributed as du
+from BrainID.utils.env import pathmgr
 
- 
 
 def _suppress_print():
     """
@@ -97,5 +96,3 @@ def log_json_stats(stats):
     json_stats = simplejson.dumps(stats, sort_keys=True, use_decimal=True)
     logger = get_logger(__name__)
     logger.info("json_stats: {:s}".format(json_stats))
-
-

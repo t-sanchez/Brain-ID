@@ -106,7 +106,7 @@ in_channels: 1
 f_maps: 32
 f_maps_supervised_seg_cnn: 32
 num_groups: 4
-num_levels: 4
+num_levels: 6
 layer_order: 'gcl'
 final_sigmoid: False
 

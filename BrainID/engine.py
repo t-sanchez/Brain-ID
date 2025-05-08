@@ -8,10 +8,10 @@ import math
 
 import torch
 
-import utils.misc as utils
-import utils.logging as logging
+import BrainID.utils.misc as utils
+import BrainID.utils.logging as logging
 import pdb
-from utils.misc import PredictionLoggerQC, log_step
+from BrainID.utils.misc import PredictionLoggerQC, log_step
 
 
 logger = logging.get_logger(__name__)

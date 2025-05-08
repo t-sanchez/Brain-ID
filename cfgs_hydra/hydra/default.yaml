@@ -1,0 +1,2 @@
+run:
+  dir: ./outputs/${job_name}_${exp_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}

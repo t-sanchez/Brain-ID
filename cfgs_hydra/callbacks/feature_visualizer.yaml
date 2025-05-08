@@ -1,0 +1,4 @@
+feature_visualizer:
+  _target_: BrainID.utils.visualizer.ValidationFeaturesSnapshot
+  output_dir: ${paths.output_dir}/snapshots
+  num_slices: 7

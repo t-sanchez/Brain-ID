@@ -1,0 +1,17 @@
+defaults:
+  - generator/generator_mild
+  - transforms/inference
+  
+_target_: BrainID.datasets.dataloader.QCDataModule
+
+df: /home/tsanchez/Documents/mial/repositories/Brain-ID/data/qc_data.csv
+train_split: "train"
+val_split: "val"
+test_split: "test"
+load_key: "im"
+target_key: "qcglobal"
+transform_target: "binarize"
+target_threshold: 1.0
+
+num_workers: 1
+batch_size: 1

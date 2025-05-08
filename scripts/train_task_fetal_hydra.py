@@ -31,51 +31,46 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # import pdb
 
     # pdb.set_trace()
-    log.info(f"Instantiating model <{cfg.model._target_}>")
+    log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
 
-    log.info(f"Instantiating datamodule <{cfg.data._target_}>")
+    log.info(f"Instantiating model <{cfg.model._target_}>")
     model = hydra.utils.instantiate(cfg.model)
 
 
-    
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
 
     log.info("Instantiating loggers...")
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
-
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
 
-    # Load model weights if provided
 
     trainer: Trainer = hydra.utils.instantiate(
         cfg.trainer,
         callbacks=callbacks,
         logger=logger,
-        fast_dev_run=4,
+        #fast_dev_run=4,
     )
 
-
+    if not cfg.resume_training:        
+        model.load_feature_weights(cfg.get("feat_ckpt"))
+        resume_ckpt = None
+        
+    else:
+        model = hydra.utils.instantiate(cfg.model, _recursive_=False)
+        resume_ckpt = cfg.get("resume_ckpt_path"),
+        
     trainer.fit(
-        model=model,
-        train_dataloaders=datamodule.train_dataloader(),
-        val_dataloaders=datamodule.val_dataloader(),
-        #ckpt_path=cfg.get("ckpt_path"),
+    model=model,
+    train_dataloaders=datamodule.train_dataloader(),
+    val_dataloaders=datamodule.val_dataloader(),
+    ckpt_path = resume_ckpt,
     )
-
-    # trainer: Trainer = hydra.utils.instantiate(
-    #    cfg.trainer
-    # )
-
-    # trainer.fit(
-    #    model=model,
-    #    train_dataloaders=datamodule.train_dataloader(),
-    # )
 
 
 @hydra.main(
-    version_base="1.3", config_path="../cfgs_hydra", config_name="train_feature_fetal.yaml"
+    version_base="1.3", config_path="../cfgs_hydra", config_name="train_qc_fetal"
 )
 def main(cfg: DictConfig) -> Optional[float]:
     """Main entry point for training.
