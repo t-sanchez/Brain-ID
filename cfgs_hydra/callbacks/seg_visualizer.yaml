@@ -1,4 +1,0 @@
-visualizer:
-  _target_: BrainID.utils.visualizer.SegValidationSnapshot
-  output_dir: ${paths.output_dir}/snapshots
-  num_slices: 7

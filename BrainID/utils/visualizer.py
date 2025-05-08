@@ -214,7 +214,7 @@ class QCValidationSnapshot(Callback):
 
         directions = ["axial", "coronal", "sagittal"]
         n_batches = len(data)
-        n_rows = 7
+        n_rows = 5
         n_cols = self.num_slices * n_batches
 
         fig, axes = plt.subplots(
@@ -265,7 +265,7 @@ class QCValidationSnapshot(Callback):
                         ax.set_yticklabels([])
 
                         # Set title for middle slice
-                        if r_idx == 0 and s_idx == mid_slice:
+                        if row == 0 and s_idx == mid_slice:
                             ax.set_title(f"Quality: {pred} (GT: {target})", fontsize=8)
 
         plt.tight_layout()

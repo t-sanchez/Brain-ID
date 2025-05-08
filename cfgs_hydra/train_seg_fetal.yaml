@@ -4,10 +4,8 @@ defaults:
   - paths: default
   - trainer: default
   - logger: wandb
-#  - default_val
   - callbacks: task_seg
   - hydra: default
-#  #- submit
   - _self_
   
 ## job specific set ups ##
@@ -27,7 +25,8 @@ resume_optim: True
 resume_lr_scheduler: True
 freeze_feat: False
 feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
-#train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
+resume_training: False
+resume_ckpt:
 
 ## paths 
 out_dir: outs/BrainID
