@@ -24,6 +24,7 @@ References
        "Splines: A Perfect Fit for Signal and Image Processing,"
        IEEE Signal Processing Magazine 16(6):22-38 (1999).
 """
+
 import torch
 import math
 from typing import List, Optional
@@ -37,31 +38,39 @@ def get_poles(order: int) -> List[float]:
     if order in (0, 1):
         return empty
     if order == 2:
-        return [math.sqrt(8.) - 3.]
+        return [math.sqrt(8.0) - 3.0]
     if order == 3:
-        return [math.sqrt(3.) - 2.]
+        return [math.sqrt(3.0) - 2.0]
     if order == 4:
-        return [math.sqrt(664. - math.sqrt(438976.)) + math.sqrt(304.) - 19.,
-                math.sqrt(664. + math.sqrt(438976.)) - math.sqrt(304.) - 19.]
+        return [
+            math.sqrt(664.0 - math.sqrt(438976.0)) + math.sqrt(304.0) - 19.0,
+            math.sqrt(664.0 + math.sqrt(438976.0)) - math.sqrt(304.0) - 19.0,
+        ]
     if order == 5:
-        return [math.sqrt(67.5 - math.sqrt(4436.25)) + math.sqrt(26.25) - 6.5,
-                math.sqrt(67.5 + math.sqrt(4436.25)) - math.sqrt(26.25) - 6.5]
+        return [
+            math.sqrt(67.5 - math.sqrt(4436.25)) + math.sqrt(26.25) - 6.5,
+            math.sqrt(67.5 + math.sqrt(4436.25)) - math.sqrt(26.25) - 6.5,
+        ]
     if order == 6:
-        return [-0.488294589303044755130118038883789062112279161239377608394,
-                -0.081679271076237512597937765737059080653379610398148178525368,
-                -0.00141415180832581775108724397655859252786416905534669851652709]
+        return [
+            -0.488294589303044755130118038883789062112279161239377608394,
+            -0.081679271076237512597937765737059080653379610398148178525368,
+            -0.00141415180832581775108724397655859252786416905534669851652709,
+        ]
     if order == 7:
-        return [-0.5352804307964381655424037816816460718339231523426924148812,
-                -0.122554615192326690515272264359357343605486549427295558490763,
-                -0.0091486948096082769285930216516478534156925639545994482648003]
+        return [
+            -0.5352804307964381655424037816816460718339231523426924148812,
+            -0.122554615192326690515272264359357343605486549427295558490763,
+            -0.0091486948096082769285930216516478534156925639545994482648003,
+        ]
     raise NotImplementedError
 
 
 @torch.jit.script
 def get_gain(poles: List[float]) -> float:
-    lam: float = 1.
+    lam: float = 1.0
     for pole in poles:
-        lam *= (1. - pole) * (1. - 1./pole)
+        lam *= (1.0 - pole) * (1.0 - 1.0 / pole)
     return lam
 
 
@@ -69,16 +78,18 @@ def get_gain(poles: List[float]) -> float:
 def dft_initial(inp, pole: float, dim: int = -1, keepdim: bool = False):
 
     assert inp.shape[dim] > 1
-    max_iter: int = int(math.ceil(-30./math.log(abs(pole))))
+    max_iter: int = int(math.ceil(-30.0 / math.log(abs(pole))))
     max_iter = min(max_iter, inp.shape[dim])
 
     poles = torch.as_tensor(pole, dtype=inp.dtype, device=inp.device)
-    poles = poles.pow(torch.arange(1, max_iter, dtype=inp.dtype, device=inp.device))
+    poles = poles.pow(
+        torch.arange(1, max_iter, dtype=inp.dtype, device=inp.device)
+    )
     poles = poles.flip(0)
 
     inp = movedim1(inp, dim, 0)
     inp0 = inp[0]
-    inp = inp[1-max_iter:]
+    inp = inp[1 - max_iter :]
     inp = movedim1(inp, 0, -1)
     out = torch.matmul(inp.unsqueeze(-2), poles.unsqueeze(-1)).squeeze(-1)
     out = out + inp0.unsqueeze(-1)
@@ -87,7 +98,7 @@ def dft_initial(inp, pole: float, dim: int = -1, keepdim: bool = False):
     else:
         out = out.squeeze(-1)
 
-    pole = pole ** max_iter
+    pole = pole**max_iter
     out = out / (1 - pole)
     return out
 
@@ -96,12 +107,14 @@ def dft_initial(inp, pole: float, dim: int = -1, keepdim: bool = False):
 def dct1_initial(inp, pole: float, dim: int = -1, keepdim: bool = False):
 
     n = inp.shape[dim]
-    max_iter: int = int(math.ceil(-30./math.log(abs(pole))))
+    max_iter: int = int(math.ceil(-30.0 / math.log(abs(pole))))
 
     if max_iter < n:
 
         poles = torch.as_tensor(pole, dtype=inp.dtype, device=inp.device)
-        poles = poles.pow(torch.arange(1, max_iter, dtype=inp.dtype, device=inp.device))
+        poles = poles.pow(
+            torch.arange(1, max_iter, dtype=inp.dtype, device=inp.device)
+        )
 
         inp = movedim1(inp, dim, 0)
         inp0 = inp[0]
@@ -123,7 +136,9 @@ def dct1_initial(inp, pole: float, dim: int = -1, keepdim: bool = False):
         inp = movedim1(inp, 0, -1)
 
         poles = torch.as_tensor(pole, dtype=inp.dtype, device=inp.device)
-        poles = poles.pow(torch.arange(1, n-1, dtype=inp.dtype, device=inp.device))
+        poles = poles.pow(
+            torch.arange(1, n - 1, dtype=inp.dtype, device=inp.device)
+        )
         poles = poles + (polen * polen) / poles
 
         out = torch.matmul(inp.unsqueeze(-2), poles.unsqueeze(-1)).squeeze(-1)
@@ -152,16 +167,19 @@ def dct2_initial(inp, pole: float, dim: int = -1, keepdim: bool = False):
 
     n = inp.shape[dim]
 
-    polen = pole ** n
-    pole_last = polen * (1 + 1/(pole + polen * polen))
+    polen = pole**n
+    pole_last = polen * (1 + 1 / (pole + polen * polen))
     inp00 = inp[0]
     inp0 = inp[0] + pole_last * inp[-1]
     inp = inp[1:-1]
     inp = movedim1(inp, 0, -1)
 
     poles = torch.as_tensor(pole, dtype=inp.dtype, device=inp.device)
-    poles = (poles.pow(torch.arange(1, n-1, dtype=inp.dtype, device=inp.device)) +
-             poles.pow(torch.arange(2*n-2, n, -1, dtype=inp.dtype, device=inp.device)))
+    poles = poles.pow(
+        torch.arange(1, n - 1, dtype=inp.dtype, device=inp.device)
+    ) + poles.pow(
+        torch.arange(2 * n - 2, n, -1, dtype=inp.dtype, device=inp.device)
+    )
 
     out = torch.matmul(inp.unsqueeze(-2), poles.unsqueeze(-1)).squeeze(-1)
 
@@ -181,15 +199,17 @@ def dct2_initial(inp, pole: float, dim: int = -1, keepdim: bool = False):
 def dft_final(inp, pole: float, dim: int = -1, keepdim: bool = False):
 
     assert inp.shape[dim] > 1
-    max_iter: int = int(math.ceil(-30./math.log(abs(pole))))
+    max_iter: int = int(math.ceil(-30.0 / math.log(abs(pole))))
     max_iter = min(max_iter, inp.shape[dim])
 
     poles = torch.as_tensor(pole, dtype=inp.dtype, device=inp.device)
-    poles = poles.pow(torch.arange(2, max_iter+1, dtype=inp.dtype, device=inp.device))
+    poles = poles.pow(
+        torch.arange(2, max_iter + 1, dtype=inp.dtype, device=inp.device)
+    )
 
     inp = movedim1(inp, dim, 0)
     inp0 = inp[-1]
-    inp = inp[:max_iter-1]
+    inp = inp[: max_iter - 1]
     inp = movedim1(inp, 0, -1)
     out = torch.matmul(inp.unsqueeze(-2), poles.unsqueeze(-1)).squeeze(-1)
     out = out.add(inp0.unsqueeze(-1), alpha=pole)
@@ -198,7 +218,7 @@ def dft_final(inp, pole: float, dim: int = -1, keepdim: bool = False):
     else:
         out = out.squeeze(-1)
 
-    pole = pole ** max_iter
+    pole = pole**max_iter
     out = out / (pole - 1)
     return out
 
@@ -207,7 +227,7 @@ def dft_final(inp, pole: float, dim: int = -1, keepdim: bool = False):
 def dct1_final(inp, pole: float, dim: int = -1, keepdim: bool = False):
     inp = movedim1(inp, dim, 0)
     out = pole * inp[-2] + inp[-1]
-    out = out * (pole / (pole*pole - 1))
+    out = out * (pole / (pole * pole - 1))
     if keepdim:
         out = movedim1(out.unsqueeze(0), 0, dim)
     return out
@@ -231,29 +251,34 @@ class CoeffBound:
         self.bound = bound
 
     def initial(self, inp, pole: float, dim: int = -1, keepdim: bool = False):
-        if self.bound in (0, 2):    # zero, dct1
+        if self.bound in (0, 2):  # zero, dct1
             return dct1_initial(inp, pole, dim, keepdim)
         elif self.bound in (1, 3):  # nearest, dct2
             return dct2_initial(inp, pole, dim, keepdim)
-        elif self.bound == 6:       # dft
+        elif self.bound == 6:  # dft
             return dft_initial(inp, pole, dim, keepdim)
         else:
             raise NotImplementedError
 
     def final(self, inp, pole: float, dim: int = -1, keepdim: bool = False):
-        if self.bound in (0, 2):    # zero, dct1
+        if self.bound in (0, 2):  # zero, dct1
             return dct1_final(inp, pole, dim, keepdim)
         elif self.bound in (1, 3):  # nearest, dct2
             return dct2_final(inp, pole, dim, keepdim)
-        elif self.bound == 6:       # dft
+        elif self.bound == 6:  # dft
             return dft_final(inp, pole, dim, keepdim)
         else:
             raise NotImplementedError
 
 
 @torch.jit.script
-def filter(inp, bound: CoeffBound, poles: List[float],
-           dim: int = -1, inplace: bool = False):
+def filter(
+    inp,
+    bound: CoeffBound,
+    poles: List[float],
+    dim: int = -1,
+    inplace: bool = False,
+):
 
     if not inplace:
         inp = inp.clone()
@@ -270,20 +295,21 @@ def filter(inp, bound: CoeffBound, poles: List[float],
         inp[0] = bound.initial(inp, pole, dim=0, keepdim=False)
 
         for i in range(1, n):
-            inp[i].add_(inp[i-1], alpha=pole)
+            inp[i].add_(inp[i - 1], alpha=pole)
 
         inp[-1] = bound.final(inp, pole, dim=0, keepdim=False)
 
-        for i in range(n-2, -1, -1):
-            inp[i].neg_().add_(inp[i+1]).mul_(pole)
+        for i in range(n - 2, -1, -1):
+            inp[i].neg_().add_(inp[i + 1]).mul_(pole)
 
     inp = movedim1(inp, 0, dim)
     return inp
 
 
 @torch.jit.script
-def spline_coeff(inp, bound: int, order: int, dim: int = -1,
-                 inplace: bool = False):
+def spline_coeff(
+    inp, bound: int, order: int, dim: int = -1, inplace: bool = False
+):
     """Compute the interpolating spline coefficients, for a given spline order
     and boundary conditions, along a single dimension.
 
@@ -311,8 +337,13 @@ def spline_coeff(inp, bound: int, order: int, dim: int = -1,
 
 
 @torch.jit.script
-def spline_coeff_nd(inp, bound: List[int], order: List[int],
-                    dim: Optional[int] = None, inplace: bool = False):
+def spline_coeff_nd(
+    inp,
+    bound: List[int],
+    order: List[int],
+    dim: Optional[int] = None,
+    inplace: bool = False,
+):
     """Compute the interpolating spline coefficients, for a given spline order
     and boundary condition, along the last `dim` dimensions.
 

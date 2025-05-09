@@ -28,12 +28,12 @@ def make_list(x, n=None, **kwargs):
         x = [x]
     x = list(x)
     if n and len(x) < n:
-        default = kwargs.get('default', x[-1])
+        default = kwargs.get("default", x[-1])
         x = x + [default] * max(0, n - len(x))
     return x
 
 
-def expanded_shape(*shapes, side='left'):
+def expanded_shape(*shapes, side="left"):
     """Expand input shapes according to broadcasting rules
 
     Parameters
@@ -54,9 +54,11 @@ def expanded_shape(*shapes, side='left'):
         If shapes are not compatible for broadcast.
 
     """
+
     def error(s0, s1):
-        raise ValueError('Incompatible shapes for broadcasting: {} and {}.'
-                         .format(s0, s1))
+        raise ValueError(
+            "Incompatible shapes for broadcasting: {} and {}.".format(s0, s1)
+        )
 
     # 1. nb dimensions
     nb_dim = 0
@@ -68,12 +70,14 @@ def expanded_shape(*shapes, side='left'):
     for i, shape1 in enumerate(shapes):
         pad_size = nb_dim - len(shape1)
         ones = [1] * pad_size
-        if side == 'left':
+        if side == "left":
             shape1 = [*ones, *shape1]
         else:
             shape1 = [*shape1, *ones]
-        shape = [max(s0, s1) if s0 == 1 or s1 == 1 or s0 == s1
-                 else error(s0, s1) for s0, s1 in zip(shape, shape1)]
+        shape = [
+            max(s0, s1) if s0 == 1 or s1 == 1 or s0 == s1 else error(s0, s1)
+            for s0, s1 in zip(shape, shape1)
+        ]
 
     return tuple(shape)
 
@@ -110,27 +114,27 @@ def matvec(mat, vec, out=None):
 
 def _compare_versions(version1, mode, version2):
     for v1, v2 in zip(version1, version2):
-        if mode in ('gt', '>'):
+        if mode in ("gt", ">"):
             if v1 > v2:
                 return True
             elif v1 < v2:
                 return False
-        elif mode in ('ge', '>='):
+        elif mode in ("ge", ">="):
             if v1 > v2:
                 return True
             elif v1 < v2:
                 return False
-        elif mode in ('lt', '<'):
+        elif mode in ("lt", "<"):
             if v1 < v2:
                 return True
             elif v1 > v2:
                 return False
-        elif mode in ('le', '<='):
+        elif mode in ("le", "<="):
             if v1 < v2:
                 return True
             elif v1 > v2:
                 return False
-    if mode in ('gt', 'lt', '>', '<'):
+    if mode in ("gt", "lt", ">", "<"):
         return False
     else:
         return True
@@ -149,22 +153,23 @@ def torch_version(mode, version):
     True if "torch.version <mode> version"
 
     """
-    current_version, *cuda_variant = torch.__version__.split('+')
-    major, minor, patch, *_ = current_version.split('.')
+    current_version, *cuda_variant = torch.__version__.split("+")
+    major, minor, patch, *_ = current_version.split(".")
     # strip alpha tags
-    for x in 'abcdefghijklmnopqrstuvwxy':
+    for x in "abcdefghijklmnopqrstuvwxy":
         if x in patch:
-            patch = patch[:patch.index(x)]
+            patch = patch[: patch.index(x)]
     current_version = (int(major), int(minor), int(patch))
     version = make_list(version)
     return _compare_versions(current_version, mode, version)
 
 
-if torch_version('>=', (1, 10)):
-    meshgrid_ij = lambda *x: torch.meshgrid(*x, indexing='ij')
-    meshgrid_xy = lambda *x: torch.meshgrid(*x, indexing='xy')
+if torch_version(">=", (1, 10)):
+    meshgrid_ij = lambda *x: torch.meshgrid(*x, indexing="ij")
+    meshgrid_xy = lambda *x: torch.meshgrid(*x, indexing="xy")
 else:
     meshgrid_ij = lambda *x: torch.meshgrid(*x)
+
     def meshgrid_xy(*x):
         grid = list(torch.meshgrid(*x))
         if len(grid) > 1:

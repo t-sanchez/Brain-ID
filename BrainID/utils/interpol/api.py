@@ -1,18 +1,31 @@
 """High level interpolation API"""
 
-__all__ = ['grid_pull', 'grid_push', 'grid_count', 'grid_grad',
-           'spline_coeff', 'spline_coeff_nd',
-           'identity_grid', 'add_identity_grid', 'add_identity_grid_']
+__all__ = [
+    "grid_pull",
+    "grid_push",
+    "grid_count",
+    "grid_grad",
+    "spline_coeff",
+    "spline_coeff_nd",
+    "identity_grid",
+    "add_identity_grid",
+    "add_identity_grid_",
+]
 
 import torch
 from .utils import expanded_shape, matvec
 from .jit_utils import movedim1, meshgrid
-from .autograd import (GridPull, GridPush, GridCount, GridGrad,
-                       SplineCoeff, SplineCoeffND)
+from .autograd import (
+    GridPull,
+    GridPush,
+    GridCount,
+    GridGrad,
+    SplineCoeff,
+    SplineCoeffND,
+)
 from . import backend, jitfields
 
-_doc_interpolation = \
-"""`interpolation` can be an int, a string or an InterpolationType.
+_doc_interpolation = """`interpolation` can be an int, a string or an InterpolationType.
     Possible values are:
         - 0 or 'nearest'
         - 1 or 'linear'
@@ -24,8 +37,7 @@ _doc_interpolation = \
     A list of values can be provided, in the order [W, H, D],
     to specify dimension-specific interpolation orders."""
 
-_doc_bound = \
-"""`bound` can be an int, a string or a BoundType.
+_doc_bound = """`bound` can be an int, a string or a BoundType.
     Possible values are:
         - 'replicate'  or 'nearest'     :  a  a  a  |  a  b  c  d  |  d  d  d
         - 'dct1'       or 'mirror'      :  d  c  b  |  a  b  c  d  |  c  b  a
@@ -43,8 +55,7 @@ _doc_bound = \
     See https://en.wikipedia.org/wiki/Discrete_cosine_transform
         https://en.wikipedia.org/wiki/Discrete_sine_transform"""
 
-_doc_bound_coeff = \
-"""`bound` can be an int, a string or a BoundType. 
+_doc_bound_coeff = """`bound` can be an int, a string or a BoundType. 
     Possible values are:
         - 'replicate'  or 'nearest'     :  a  a  a  |  a  b  c  d  |  d  d  d
         - 'dct1'       or 'mirror'      :  d  c  b  |  a  b  c  d  |  c  b  a
@@ -65,8 +76,7 @@ _doc_bound_coeff = \
     /!\ Only 'dct1', 'dct2' and 'dft' are implemented for interpolation
         orders >= 6."""
 
-_ref_coeff = \
-"""..[1]  M. Unser, A. Aldroubi and M. Eden.
+_ref_coeff = """..[1]  M. Unser, A. Aldroubi and M. Eden.
        "B-Spline Signal Processing: Part I-Theory,"
        IEEE Transactions on Signal Processing 41(2):821-832 (1993).
 ..[2]  M. Unser, A. Aldroubi and M. Eden.
@@ -91,20 +101,22 @@ def _preproc(grid, input=None, mode=None):
     """
     dim = grid.shape[-1]
     if input is None:
-        spatial = grid.shape[-dim-1:-1]
-        batch = grid.shape[:-dim-1]
+        spatial = grid.shape[-dim - 1 : -1]
+        batch = grid.shape[: -dim - 1]
         grid = grid.reshape([-1, *spatial, dim])
         info = dict(batch=batch, channel=[1] if batch else [], dim=dim)
         return grid, info
 
-    grid_spatial = grid.shape[-dim-1:-1]
-    grid_batch = grid.shape[:-dim-1]
+    grid_spatial = grid.shape[-dim - 1 : -1]
+    grid_batch = grid.shape[: -dim - 1]
     input_spatial = input.shape[-dim:]
-    channel = 0 if input.dim() == dim else input.shape[-dim-1]
-    input_batch = input.shape[:-dim-1]
+    channel = 0 if input.dim() == dim else input.shape[-dim - 1]
+    input_batch = input.shape[: -dim - 1]
 
-    if mode == 'push':
-        grid_spatial = input_spatial = expanded_shape(grid_spatial, input_spatial)
+    if mode == "push":
+        grid_spatial = input_spatial = expanded_shape(
+            grid_spatial, input_spatial
+        )
 
     # broadcast and reshape
     batch = expanded_shape(grid_batch, input_batch)
@@ -120,22 +132,28 @@ def _preproc(grid, input=None, mode=None):
 
 def _postproc(out, shape_info, mode):
     """Postprocess tensors for pull/push/count/grad"""
-    dim = shape_info['dim']
-    if mode != 'grad':
+    dim = shape_info["dim"]
+    if mode != "grad":
         spatial = out.shape[-dim:]
         feat = []
     else:
-        spatial = out.shape[-dim-1:-1]
+        spatial = out.shape[-dim - 1 : -1]
         feat = [out.shape[-1]]
-    batch = shape_info['batch']
-    channel = shape_info['channel']
+    batch = shape_info["batch"]
+    channel = shape_info["channel"]
 
     out = out.reshape([*batch, *channel, *spatial, *feat])
     return out
 
 
-def grid_pull(input, grid, interpolation='linear', bound='zero',
-              extrapolate=False, prefilter=False):
+def grid_pull(
+    input,
+    grid,
+    interpolation="linear",
+    bound="zero",
+    extrapolate=False,
+    prefilter=False,
+):
     """Sample an image with respect to a deformation field.
 
     Notes
@@ -143,11 +161,11 @@ def grid_pull(input, grid, interpolation='linear', bound='zero',
     {interpolation}
 
     {bound}
-    
-    If the input dtype is not a floating point type, the input image is 
-    assumed to contain labels. Then, unique labels are extracted 
-    and resampled individually, making them soft labels. Finally, 
-    the label map is reconstructed from the individual soft labels by 
+
+    If the input dtype is not a floating point type, the input image is
+    assumed to contain labels. Then, unique labels are extracted
+    and resampled individually, making them soft labels. Finally,
+    the label map is reconstructed from the individual soft labels by
     assigning the label with maximum soft value.
 
     Parameters
@@ -172,8 +190,9 @@ def grid_pull(input, grid, interpolation='linear', bound='zero',
 
     """
     if backend.jitfields and jitfields.available:
-        return jitfields.grid_pull(input, grid, interpolation, bound,
-                                   extrapolate, prefilter)
+        return jitfields.grid_pull(
+            input, grid, interpolation, bound, extrapolate, prefilter
+        )
 
     grid, input, shape_info = _preproc(grid, input)
     batch, channel = input.shape[:2]
@@ -186,22 +205,37 @@ def grid_pull(input, grid, interpolation='linear', bound='zero',
         for label in input.unique():
             soft = (input == label).to(grid.dtype)
             if prefilter:
-                input = spline_coeff_nd(soft, interpolation=interpolation,
-                                        bound=bound, dim=dim, inplace=True)
-            soft = GridPull.apply(soft, grid, interpolation, bound, extrapolate)
+                input = spline_coeff_nd(
+                    soft,
+                    interpolation=interpolation,
+                    bound=bound,
+                    dim=dim,
+                    inplace=True,
+                )
+            soft = GridPull.apply(
+                soft, grid, interpolation, bound, extrapolate
+            )
             out[soft > pmax] = label
             pmax = torch.max(pmax, soft)
     else:
         if prefilter:
-            input = spline_coeff_nd(input, interpolation=interpolation,
-                                    bound=bound, dim=dim)
+            input = spline_coeff_nd(
+                input, interpolation=interpolation, bound=bound, dim=dim
+            )
         out = GridPull.apply(input, grid, interpolation, bound, extrapolate)
 
-    return _postproc(out, shape_info, mode='pull')
+    return _postproc(out, shape_info, mode="pull")
 
 
-def grid_push(input, grid, shape=None, interpolation='linear', bound='zero',
-              extrapolate=False, prefilter=False):
+def grid_push(
+    input,
+    grid,
+    shape=None,
+    interpolation="linear",
+    bound="zero",
+    extrapolate=False,
+    prefilter=False,
+):
     """Splat an image with respect to a deformation field (pull adjoint).
 
     Notes
@@ -234,10 +268,11 @@ def grid_push(input, grid, shape=None, interpolation='linear', bound='zero',
 
     """
     if backend.jitfields and jitfields.available:
-        return jitfields.grid_push(input, grid, shape, interpolation, bound,
-                                   extrapolate, prefilter)
+        return jitfields.grid_push(
+            input, grid, shape, interpolation, bound, extrapolate, prefilter
+        )
 
-    grid, input, shape_info = _preproc(grid, input, mode='push')
+    grid, input, shape_info = _preproc(grid, input, mode="push")
     dim = grid.shape[-1]
 
     if shape is None:
@@ -245,13 +280,19 @@ def grid_push(input, grid, shape=None, interpolation='linear', bound='zero',
 
     out = GridPush.apply(input, grid, shape, interpolation, bound, extrapolate)
     if prefilter:
-        out = spline_coeff_nd(out, interpolation=interpolation, bound=bound,
-                              dim=dim, inplace=True)
-    return _postproc(out, shape_info, mode='push')
+        out = spline_coeff_nd(
+            out,
+            interpolation=interpolation,
+            bound=bound,
+            dim=dim,
+            inplace=True,
+        )
+    return _postproc(out, shape_info, mode="push")
 
 
-def grid_count(grid, shape=None, interpolation='linear', bound='zero',
-               extrapolate=False):
+def grid_count(
+    grid, shape=None, interpolation="linear", bound="zero", extrapolate=False
+):
     """Splatting weights with respect to a deformation field (pull adjoint).
 
     Notes
@@ -280,17 +321,25 @@ def grid_count(grid, shape=None, interpolation='linear', bound='zero',
 
     """
     if backend.jitfields and jitfields.available:
-        return jitfields.grid_count(grid, shape, interpolation, bound, extrapolate)
+        return jitfields.grid_count(
+            grid, shape, interpolation, bound, extrapolate
+        )
 
     grid, shape_info = _preproc(grid)
     out = GridCount.apply(grid, shape, interpolation, bound, extrapolate)
-    return _postproc(out, shape_info, mode='count')
+    return _postproc(out, shape_info, mode="count")
 
 
-def grid_grad(input, grid, interpolation='linear', bound='zero',
-              extrapolate=False, prefilter=False):
+def grid_grad(
+    input,
+    grid,
+    interpolation="linear",
+    bound="zero",
+    extrapolate=False,
+    prefilter=False,
+):
     """Sample spatial gradients of an image with respect to a deformation field.
-    
+
     Notes
     -----
     {interpolation}
@@ -321,19 +370,21 @@ def grid_grad(input, grid, interpolation='linear', bound='zero',
 
     """
     if backend.jitfields and jitfields.available:
-        return jitfields.grid_grad(input, grid, interpolation, bound,
-                                   extrapolate, prefilter)
+        return jitfields.grid_grad(
+            input, grid, interpolation, bound, extrapolate, prefilter
+        )
 
     grid, input, shape_info = _preproc(grid, input)
     dim = grid.shape[-1]
     if prefilter:
         input = spline_coeff_nd(input, interpolation, bound, dim)
     out = GridGrad.apply(input, grid, interpolation, bound, extrapolate)
-    return _postproc(out, shape_info, mode='grad')
+    return _postproc(out, shape_info, mode="grad")
 
 
-def spline_coeff(input, interpolation='linear', bound='dct2', dim=-1,
-                 inplace=False):
+def spline_coeff(
+    input, interpolation="linear", bound="dct2", dim=-1, inplace=False
+):
     """Compute the interpolating spline coefficients, for a given spline order
     and boundary conditions, along a single dimension.
 
@@ -376,15 +427,17 @@ def spline_coeff(input, interpolation='linear', bound='dct2', dim=-1,
     # Philippe Thevenaz's code does not have an explicit license as far
     # as we know.
     if backend.jitfields and jitfields.available:
-        return jitfields.spline_coeff(input, interpolation, bound,
-                                      dim, inplace)
+        return jitfields.spline_coeff(
+            input, interpolation, bound, dim, inplace
+        )
 
     out = SplineCoeff.apply(input, bound, interpolation, dim, inplace)
     return out
 
 
-def spline_coeff_nd(input, interpolation='linear', bound='dct2', dim=None,
-                    inplace=False):
+def spline_coeff_nd(
+    input, interpolation="linear", bound="dct2", dim=None, inplace=False
+):
     """Compute the interpolating spline coefficients, for a given spline order
     and boundary conditions, along the last `dim` dimensions.
 
@@ -426,25 +479,32 @@ def spline_coeff_nd(input, interpolation='linear', bound='dct2', dim=None,
     # Philippe Thevenaz's code does not have an explicit license as far
     # as we know.
     if backend.jitfields and jitfields.available:
-        return jitfields.spline_coeff_nd(input, interpolation, bound,
-                                         dim, inplace)
+        return jitfields.spline_coeff_nd(
+            input, interpolation, bound, dim, inplace
+        )
 
     out = SplineCoeffND.apply(input, bound, interpolation, dim, inplace)
     return out
 
 
 grid_pull.__doc__ = grid_pull.__doc__.format(
-    interpolation=_doc_interpolation, bound=_doc_bound)
+    interpolation=_doc_interpolation, bound=_doc_bound
+)
 grid_push.__doc__ = grid_push.__doc__.format(
-    interpolation=_doc_interpolation, bound=_doc_bound)
+    interpolation=_doc_interpolation, bound=_doc_bound
+)
 grid_count.__doc__ = grid_count.__doc__.format(
-    interpolation=_doc_interpolation, bound=_doc_bound)
+    interpolation=_doc_interpolation, bound=_doc_bound
+)
 grid_grad.__doc__ = grid_grad.__doc__.format(
-    interpolation=_doc_interpolation, bound=_doc_bound)
+    interpolation=_doc_interpolation, bound=_doc_bound
+)
 spline_coeff.__doc__ = spline_coeff.__doc__.format(
-    interpolation=_doc_interpolation, bound=_doc_bound_coeff, ref=_ref_coeff)
+    interpolation=_doc_interpolation, bound=_doc_bound_coeff, ref=_ref_coeff
+)
 spline_coeff_nd.__doc__ = spline_coeff_nd.__doc__.format(
-    interpolation=_doc_interpolation, bound=_doc_bound_coeff, ref=_ref_coeff)
+    interpolation=_doc_interpolation, bound=_doc_bound_coeff, ref=_ref_coeff
+)
 
 # aliases
 pull = grid_pull
@@ -470,8 +530,9 @@ def identity_grid(shape, dtype=None, device=None):
         Transformation field
 
     """
-    mesh1d = [torch.arange(float(s), dtype=dtype, device=device)
-              for s in shape]
+    mesh1d = [
+        torch.arange(float(s), dtype=dtype, device=device) for s in shape
+    ]
     grid = torch.stack(meshgrid(mesh1d), dim=-1)
     return grid
 
@@ -492,9 +553,10 @@ def add_identity_grid_(disp):
 
     """
     dim = disp.shape[-1]
-    spatial = disp.shape[-dim-1:-1]
-    mesh1d = [torch.arange(s, dtype=disp.dtype, device=disp.device)
-              for s in spatial]
+    spatial = disp.shape[-dim - 1 : -1]
+    mesh1d = [
+        torch.arange(s, dtype=disp.dtype, device=disp.device) for s in spatial
+    ]
     grid = meshgrid(mesh1d)
     disp = movedim1(disp, -1, 0)
     for i, grid1 in enumerate(grid):
@@ -541,12 +603,17 @@ def affine_grid(mat, shape):
     shape = list(shape)
     nb_dim = mat.shape[-1] - 1
     if nb_dim != len(shape):
-        raise ValueError('Dimension of the affine matrix ({}) and shape ({}) '
-                         'are not the same.'.format(nb_dim, len(shape)))
-    if mat.shape[-2] not in (nb_dim, nb_dim+1):
-        raise ValueError('First argument should be matrces of shape '
-                         '(..., {0}, {1}) or (..., {1], {1}) but got {2}.'
-                         .format(nb_dim, nb_dim+1, mat.shape))
+        raise ValueError(
+            "Dimension of the affine matrix ({}) and shape ({}) "
+            "are not the same.".format(nb_dim, len(shape))
+        )
+    if mat.shape[-2] not in (nb_dim, nb_dim + 1):
+        raise ValueError(
+            "First argument should be matrces of shape "
+            "(..., {0}, {1}) or (..., {1], {1}) but got {2}.".format(
+                nb_dim, nb_dim + 1, mat.shape
+            )
+        )
     batch_shape = mat.shape[:-2]
     grid = identity_grid(shape, mat.dtype, mat.device)
     if batch_shape:

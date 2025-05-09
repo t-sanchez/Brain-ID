@@ -318,7 +318,7 @@ def train_one_epoch_downstream(
 
     header = "Epoch: [{}/{}]".format(epoch, args.n_epochs)
     step_logger = PredictionLoggerQC()
-    
+
     for itr, (subjects, samples) in enumerate(
         metric_logger.log_every(
             data_loader,

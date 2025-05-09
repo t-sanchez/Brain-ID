@@ -4,7 +4,7 @@ from BrainID.datasets.fetal_id_synth import (
     BrainIDFetalSynthDataset,
     BlockRandomSampler,
     RandomBlockPatchFetalDataset,
-    FetalSynthIDDataset
+    FetalSynthIDDataset,
 )
 from BrainID.datasets.fetal_scalar import FetalScalarDataset
 from fetalsyngen.data.datasets import FetalTestDataset, FetalSynthDataset
@@ -16,6 +16,7 @@ import monai
 import logging
 import torch
 from torch.utils.data import WeightedRandomSampler
+
 
 class FeatureDataModule(L.LightningDataModule):
 
@@ -152,7 +153,9 @@ class FeatureDataModule(L.LightningDataModule):
         # log dataset size
         logging.info(f"Train dataset size: {len(self.train_ds)}")
         logging.info(f"Val dataset size: {len(self.val_ds)}")
-        logging.info(f"Test dataset size: {len(self.test_ds) if self.test_ds else 0}")
+        logging.info(
+            f"Test dataset size: {len(self.test_ds) if self.test_ds else 0}"
+        )
 
     def get_subjects(self):
         split_df = pd.read_csv(self.split_file)
@@ -180,7 +183,10 @@ class FeatureDataModule(L.LightningDataModule):
             )
         batch = batch[0]
 
-        batch = {k: v.unsqueeze(0) if torch.is_tensor(v) else v for k, v in batch.items()}
+        batch = {
+            k: v.unsqueeze(0) if torch.is_tensor(v) else v
+            for k, v in batch.items()
+        }
         batch["input"] = [x.unsqueeze(0) for x in batch["input"]]
         return batch
 
@@ -289,7 +295,10 @@ class QCDataModule(L.LightningDataModule):
             )
         batch = batch[0]
 
-        batch = {k: v.unsqueeze(0) if torch.is_tensor(v) else v for k, v in batch.items()}
+        batch = {
+            k: v.unsqueeze(0) if torch.is_tensor(v) else v
+            for k, v in batch.items()
+        }
         batch["input"] = [x.unsqueeze(0) for x in batch["input"]]
         return batch
 
@@ -302,16 +311,20 @@ class QCDataModule(L.LightningDataModule):
                 labels = labels.tolist()
                 n_1 = labels.count(1)
                 n_0 = labels.count(0)
-                weights = [1.0 / n_1 if label == 1 else 1.0 / n_0 for label in labels]
+                weights = [
+                    1.0 / n_1 if label == 1 else 1.0 / n_0 for label in labels
+                ]
             else:
                 # Do a histogram and equalize the weights
                 hist = torch.histc(torch.tensor(labels), bins=20)
                 hist = hist / hist.sum()
                 weights = [1.0 / hist[int(label)] for label in labels]
 
-            sampler = WeightedRandomSampler(weights, len(self.train_ds), replacement=True)
+            sampler = WeightedRandomSampler(
+                weights, len(self.train_ds), replacement=True
+            )
         else:
-            sampler=None
+            sampler = None
         return DataLoader(
             self.train_ds,
             batch_size=self.batch_size,
@@ -376,7 +389,9 @@ class SegDataModule(L.LightningDataModule):
         assert self.train_type in ["synth", "real"]
         assert self.val_type in ["synth", "real", "test"]
 
-        self.train_subjects, self.val_subjects, self.test_subjects = self.get_subjects()
+        self.train_subjects, self.val_subjects, self.test_subjects = (
+            self.get_subjects()
+        )
         # Initialize datasets
         if self.train_type == "synth":
 

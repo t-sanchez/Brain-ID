@@ -18,6 +18,7 @@ import nibabel as nib
 from pathlib import Path
 import SimpleITK as sitk
 from copy import deepcopy
+
 # from utils.process_cfg import load_config
 from BrainID.utils.process_cfg import build_out_dir
 from collections import defaultdict, deque
@@ -196,8 +197,6 @@ def cropping(img_path, tol=0, crop_range_lst=None, spare=0, save_path=None):
         sitk.WriteImage(cropped_img, save_path)
 
     return cropped_img, [[x0, y0, z0], [x1, y1, z1]], new_origin
-
-
 
 
 #########################################
@@ -411,7 +410,6 @@ def _max_by_axis(the_list):
     return maxes
 
 
-
 def nested_dict_to_device(dictionary, device):
 
     if isinstance(dictionary, dict):
@@ -429,7 +427,7 @@ def nested_dict_to_device(dictionary, device):
             return dictionary.to(device)
         except:
             return dictionary
-        
+
 
 def nested_dict_copy(dictionary):
 
@@ -449,12 +447,12 @@ def nested_dict_copy(dictionary):
         except:
             return dictionary
 
+
 # def preprocess_cfg(cfg_files, cfg_dir=""):
 #     config = load_config(cfg_files[0], cfg_files[1:], cfg_dir)
 
 #     args = nested_dict_to_namespace(config)
 #     return args
-
 
 
 ######################### Synth #########################
@@ -1018,7 +1016,6 @@ def align_volume_to_ref(volume, aff, aff_ref=None, return_aff=False, n_dims=3):
         return volume, aff_flo
     else:
         return volume
-
 
 
 def cancel_gradients_last_layer(epoch, model, freeze_last_layer):

@@ -1,4 +1,5 @@
 """Weights and derivatives of spline orders 0 to 7."""
+
 import torch
 from enum import Enum
 from .jit_utils import square, cube, pow4, pow5, pow6, pow7
@@ -24,7 +25,7 @@ class Spline:
     def weight(self, x):
         w = self.fastweight(x)
         zero = torch.zeros([1], dtype=x.dtype, device=x.device)
-        w = torch.where(x.abs() >= (self.order + 1)/2, zero, w)
+        w = torch.where(x.abs() >= (self.order + 1) / 2, zero, w)
         return w
 
     def fastweight(self, x):
@@ -38,45 +39,132 @@ class Spline:
             x_up = 0.5 * square(1.5 - x)
             return torch.where(x < 0.5, x_low, x_up)
         if self.order == 3:
-            x_low = (x * x * (x - 2.) * 3. + 4.) / 6.
-            x_up = cube(2. - x) / 6.
-            return torch.where(x < 1., x_low, x_up)
+            x_low = (x * x * (x - 2.0) * 3.0 + 4.0) / 6.0
+            x_up = cube(2.0 - x) / 6.0
+            return torch.where(x < 1.0, x_low, x_up)
         if self.order == 4:
             x_low = square(x)
-            x_low = x_low * (x_low * 0.25 - 0.625) + 115. / 192.
-            x_mid = x * (x * (x * (5. - x) / 6. - 1.25) + 5./24.) + 55./96.
-            x_up = pow4(x - 2.5) / 24.
-            return torch.where(x < 0.5, x_low, torch.where(x < 1.5, x_mid, x_up))
+            x_low = x_low * (x_low * 0.25 - 0.625) + 115.0 / 192.0
+            x_mid = (
+                x * (x * (x * (5.0 - x) / 6.0 - 1.25) + 5.0 / 24.0)
+                + 55.0 / 96.0
+            )
+            x_up = pow4(x - 2.5) / 24.0
+            return torch.where(
+                x < 0.5, x_low, torch.where(x < 1.5, x_mid, x_up)
+            )
         if self.order == 5:
             x_low = square(x)
-            x_low = x_low * (x_low * (0.25 - x / 12.) - 0.5) + 0.55
-            x_mid = x * (x * (x * (x * (x / 24. - 0.375) + 1.25) - 1.75) + 0.625) + 0.425
-            x_up = pow5(3 - x) / 120.
-            return torch.where(x < 1., x_low, torch.where(x < 2., x_mid, x_up))
+            x_low = x_low * (x_low * (0.25 - x / 12.0) - 0.5) + 0.55
+            x_mid = (
+                x * (x * (x * (x * (x / 24.0 - 0.375) + 1.25) - 1.75) + 0.625)
+                + 0.425
+            )
+            x_up = pow5(3 - x) / 120.0
+            return torch.where(
+                x < 1.0, x_low, torch.where(x < 2.0, x_mid, x_up)
+            )
         if self.order == 6:
             x_low = square(x)
-            x_low = x_low * (x_low * (7./48. - x_low/36.) - 77./192.) + 5887./11520.
-            x_mid_low = (x * (x * (x * (x * (x * (x / 48. - 7./48.) + 0.328125)
-                         - 35./288.) - 91./256.) - 7./768.) + 7861./15360.)
-            x_mid_up = (x * (x * (x * (x * (x * (7./60. - x / 120.) - 0.65625)
-                        + 133./72.) - 2.5703125) + 1267./960.) + 1379./7680.)
-            x_up = pow6(x - 3.5) / 720.
-            return torch.where(x < .5, x_low,
-                               torch.where(x < 1.5, x_mid_low,
-                                           torch.where(x < 2.5, x_mid_up, x_up)))
+            x_low = (
+                x_low * (x_low * (7.0 / 48.0 - x_low / 36.0) - 77.0 / 192.0)
+                + 5887.0 / 11520.0
+            )
+            x_mid_low = (
+                x
+                * (
+                    x
+                    * (
+                        x
+                        * (
+                            x * (x * (x / 48.0 - 7.0 / 48.0) + 0.328125)
+                            - 35.0 / 288.0
+                        )
+                        - 91.0 / 256.0
+                    )
+                    - 7.0 / 768.0
+                )
+                + 7861.0 / 15360.0
+            )
+            x_mid_up = (
+                x
+                * (
+                    x
+                    * (
+                        x
+                        * (
+                            x * (x * (7.0 / 60.0 - x / 120.0) - 0.65625)
+                            + 133.0 / 72.0
+                        )
+                        - 2.5703125
+                    )
+                    + 1267.0 / 960.0
+                )
+                + 1379.0 / 7680.0
+            )
+            x_up = pow6(x - 3.5) / 720.0
+            return torch.where(
+                x < 0.5,
+                x_low,
+                torch.where(
+                    x < 1.5, x_mid_low, torch.where(x < 2.5, x_mid_up, x_up)
+                ),
+            )
         if self.order == 7:
             x_low = square(x)
-            x_low = (x_low * (x_low * (x_low * (x / 144. - 1./36.)
-                     + 1./9.) - 1./3.) + 151./315.)
-            x_mid_low = (x * (x * (x * (x * (x * (x * (0.05 - x/240.) - 7./30.)
-                         + 0.5) - 7./18.) - 0.1) - 7./90.) + 103./210.)
-            x_mid_up = (x * (x * (x * (x * (x * (x * (x / 720. - 1./36.)
-                        + 7./30.) - 19./18.) + 49./18.) - 23./6.) + 217./90.)
-                        - 139./630.)
-            x_up = pow7(4 - x) / 5040.
-            return torch.where(x < 1., x_low,
-                               torch.where(x < 2., x_mid_low,
-                                           torch.where(x < 3., x_mid_up, x_up)))
+            x_low = (
+                x_low
+                * (
+                    x_low * (x_low * (x / 144.0 - 1.0 / 36.0) + 1.0 / 9.0)
+                    - 1.0 / 3.0
+                )
+                + 151.0 / 315.0
+            )
+            x_mid_low = (
+                x
+                * (
+                    x
+                    * (
+                        x
+                        * (
+                            x
+                            * (x * (x * (0.05 - x / 240.0) - 7.0 / 30.0) + 0.5)
+                            - 7.0 / 18.0
+                        )
+                        - 0.1
+                    )
+                    - 7.0 / 90.0
+                )
+                + 103.0 / 210.0
+            )
+            x_mid_up = (
+                x
+                * (
+                    x
+                    * (
+                        x
+                        * (
+                            x
+                            * (
+                                x * (x * (x / 720.0 - 1.0 / 36.0) + 7.0 / 30.0)
+                                - 19.0 / 18.0
+                            )
+                            + 49.0 / 18.0
+                        )
+                        - 23.0 / 6.0
+                    )
+                    + 217.0 / 90.0
+                )
+                - 139.0 / 630.0
+            )
+            x_up = pow7(4 - x) / 5040.0
+            return torch.where(
+                x < 1.0,
+                x_low,
+                torch.where(
+                    x < 2.0, x_mid_low, torch.where(x < 3.0, x_mid_up, x_up)
+                ),
+            )
         raise NotImplementedError
 
     def grad(self, x):
@@ -84,7 +172,7 @@ class Spline:
             return torch.zeros(x.shape, dtype=x.dtype, device=x.device)
         g = self.fastgrad(x)
         zero = torch.zeros([1], dtype=x.dtype, device=x.device)
-        g = torch.where(x.abs() >= (self.order + 1)/2, zero, g)
+        g = torch.where(x.abs() >= (self.order + 1) / 2, zero, g)
         return g
 
     def fastgrad(self, x):
@@ -96,46 +184,113 @@ class Spline:
         if self.order == 1:
             return torch.ones(x.shape, dtype=x.dtype, device=x.device)
         if self.order == 2:
-            return torch.where(x < 0.5, -2*x, x - 1.5)
+            return torch.where(x < 0.5, -2 * x, x - 1.5)
         if self.order == 3:
             g_low = x * (x * 1.5 - 2)
             g_up = -0.5 * square(2 - x)
             return torch.where(x < 1, g_low, g_up)
         if self.order == 4:
             g_low = x * (square(x) - 1.25)
-            g_mid = x * (x * (x * (-2./3.) + 2.5) - 2.5) + 5./24.
-            g_up = cube(2. * x - 5.) / 48.
-            return torch.where(x < 0.5, g_low,
-                               torch.where(x < 1.5, g_mid, g_up))
+            g_mid = x * (x * (x * (-2.0 / 3.0) + 2.5) - 2.5) + 5.0 / 24.0
+            g_up = cube(2.0 * x - 5.0) / 48.0
+            return torch.where(
+                x < 0.5, g_low, torch.where(x < 1.5, g_mid, g_up)
+            )
         if self.order == 5:
-            g_low = x * (x * (x * (x * (-5./12.) + 1.)) - 1.)
-            g_mid = x * (x * (x * (x * (5./24.) - 1.5) + 3.75) - 3.5) + 0.625
-            g_up = pow4(x - 3.) / (-24.)
-            return torch.where(x < 1, g_low,
-                               torch.where(x < 2, g_mid, g_up))
+            g_low = x * (x * (x * (x * (-5.0 / 12.0) + 1.0)) - 1.0)
+            g_mid = (
+                x * (x * (x * (x * (5.0 / 24.0) - 1.5) + 3.75) - 3.5) + 0.625
+            )
+            g_up = pow4(x - 3.0) / (-24.0)
+            return torch.where(x < 1, g_low, torch.where(x < 2, g_mid, g_up))
         if self.order == 6:
             g_low = square(x)
-            g_low = x * (g_low * (7./12.) - square(g_low) / 6. - 77./96.)
-            g_mid_low = (x * (x * (x * (x * (x * 0.125 - 35./48.) + 1.3125)
-                         - 35./96.) - 0.7109375) - 7./768.)
-            g_mid_up = (x * (x * (x * (x * (x / (-20.) + 7./12.) - 2.625)
-                        + 133./24.) - 5.140625) + 1267./960.)
-            g_up = pow5(2*x - 7) / 3840.
-            return torch.where(x < 0.5, g_low,
-                               torch.where(x < 1.5, g_mid_low,
-                                           torch.where(x < 2.5, g_mid_up,
-                                                       g_up)))
+            g_low = x * (
+                g_low * (7.0 / 12.0) - square(g_low) / 6.0 - 77.0 / 96.0
+            )
+            g_mid_low = (
+                x
+                * (
+                    x
+                    * (
+                        x * (x * (x * 0.125 - 35.0 / 48.0) + 1.3125)
+                        - 35.0 / 96.0
+                    )
+                    - 0.7109375
+                )
+                - 7.0 / 768.0
+            )
+            g_mid_up = (
+                x
+                * (
+                    x
+                    * (
+                        x * (x * (x / (-20.0) + 7.0 / 12.0) - 2.625)
+                        + 133.0 / 24.0
+                    )
+                    - 5.140625
+                )
+                + 1267.0 / 960.0
+            )
+            g_up = pow5(2 * x - 7) / 3840.0
+            return torch.where(
+                x < 0.5,
+                g_low,
+                torch.where(
+                    x < 1.5, g_mid_low, torch.where(x < 2.5, g_mid_up, g_up)
+                ),
+            )
         if self.order == 7:
             g_low = square(x)
-            g_low = x * (g_low * (g_low * (x * (7./144.) - 1./6.) + 4./9.) - 2./3.)
-            g_mid_low = (x * (x * (x * (x * (x * (x * (-7./240.) + 3./10.)
-                         - 7./6.) + 2.) - 7./6.) - 1./5.) - 7./90.)
-            g_mid_up = (x * (x * (x * (x * (x * (x * (7./720.) - 1./6.)
-                        + 7./6.) - 38./9.) + 49./6.) - 23./3.) + 217./90.)
-            g_up = pow6(x - 4) / (-720.)
-            return torch.where(x < 1, g_low,
-                               torch.where(x < 2, g_mid_low,
-                                           torch.where(x < 3, g_mid_up, g_up)))
+            g_low = x * (
+                g_low * (g_low * (x * (7.0 / 144.0) - 1.0 / 6.0) + 4.0 / 9.0)
+                - 2.0 / 3.0
+            )
+            g_mid_low = (
+                x
+                * (
+                    x
+                    * (
+                        x
+                        * (
+                            x
+                            * (
+                                x * (x * (-7.0 / 240.0) + 3.0 / 10.0)
+                                - 7.0 / 6.0
+                            )
+                            + 2.0
+                        )
+                        - 7.0 / 6.0
+                    )
+                    - 1.0 / 5.0
+                )
+                - 7.0 / 90.0
+            )
+            g_mid_up = (
+                x
+                * (
+                    x
+                    * (
+                        x
+                        * (
+                            x
+                            * (x * (x * (7.0 / 720.0) - 1.0 / 6.0) + 7.0 / 6.0)
+                            - 38.0 / 9.0
+                        )
+                        + 49.0 / 6.0
+                    )
+                    - 23.0 / 3.0
+                )
+                + 217.0 / 90.0
+            )
+            g_up = pow6(x - 4) / (-720.0)
+            return torch.where(
+                x < 1,
+                g_low,
+                torch.where(
+                    x < 2, g_mid_low, torch.where(x < 3, g_mid_up, g_up)
+                ),
+            )
         raise NotImplementedError
 
     def hess(self, x):
@@ -143,7 +298,7 @@ class Spline:
             return torch.zeros(x.shape, dtype=x.dtype, device=x.device)
         h = self.fasthess(x)
         zero = torch.zeros([1], dtype=x.dtype, device=x.device)
-        h = torch.where(x.abs() >= (self.order + 1)/2, zero, h)
+        h = torch.where(x.abs() >= (self.order + 1) / 2, zero, h)
         return h
 
     def fasthess(self, x):
@@ -154,43 +309,104 @@ class Spline:
             one = torch.ones([1], dtype=x.dtype, device=x.device)
             return torch.where(x < 0.5, -2 * one, one)
         if self.order == 3:
-            return torch.where(x < 1, 3. * x - 2., 2. - x)
+            return torch.where(x < 1, 3.0 * x - 2.0, 2.0 - x)
         if self.order == 4:
-            return torch.where(x < 0.5, 3. * square(x) - 1.25,
-                               torch.where(x < 1.5, x * (-2. * x + 5.) - 2.5,
-                                           square(2. * x - 5.) / 8.))
+            return torch.where(
+                x < 0.5,
+                3.0 * square(x) - 1.25,
+                torch.where(
+                    x < 1.5,
+                    x * (-2.0 * x + 5.0) - 2.5,
+                    square(2.0 * x - 5.0) / 8.0,
+                ),
+            )
         if self.order == 5:
             h_low = square(x)
-            h_low = - h_low * (x * (5./3.) - 3.) - 1.
-            h_mid = x * (x * (x * (5./6.) - 9./2.) + 15./2.) - 7./2.
-            h_up = 9./2. - x * (x * (x/6. - 3./2.) + 9./2.)
-            return torch.where(x < 1, h_low,
-                               torch.where(x < 2, h_mid, h_up))
+            h_low = -h_low * (x * (5.0 / 3.0) - 3.0) - 1.0
+            h_mid = (
+                x * (x * (x * (5.0 / 6.0) - 9.0 / 2.0) + 15.0 / 2.0)
+                - 7.0 / 2.0
+            )
+            h_up = 9.0 / 2.0 - x * (x * (x / 6.0 - 3.0 / 2.0) + 9.0 / 2.0)
+            return torch.where(x < 1, h_low, torch.where(x < 2, h_mid, h_up))
         if self.order == 6:
             h_low = square(x)
-            h_low = - h_low * (h_low * (5./6) - 7./4.) - 77./96.
-            h_mid_low = (x * (x * (x * (x * (5./8.) - 35./12.) + 63./16.)
-                         - 35./48.) - 91./128.)
-            h_mid_up = -(x * (x * (x * (x/4. - 7./3.) + 63./8.) - 133./12.)
-                         + 329./64.)
-            h_up = (x * (x * (x * (x/24. - 7./12.) + 49./16.) - 343./48.)
-                    + 2401./384.)
-            return torch.where(x < 0.5, h_low,
-                               torch.where(x < 1.5, h_mid_low,
-                                           torch.where(x < 2.5, h_mid_up,
-                                                       h_up)))
+            h_low = -h_low * (h_low * (5.0 / 6) - 7.0 / 4.0) - 77.0 / 96.0
+            h_mid_low = (
+                x
+                * (
+                    x * (x * (x * (5.0 / 8.0) - 35.0 / 12.0) + 63.0 / 16.0)
+                    - 35.0 / 48.0
+                )
+                - 91.0 / 128.0
+            )
+            h_mid_up = -(
+                x
+                * (x * (x * (x / 4.0 - 7.0 / 3.0) + 63.0 / 8.0) - 133.0 / 12.0)
+                + 329.0 / 64.0
+            )
+            h_up = (
+                x
+                * (
+                    x * (x * (x / 24.0 - 7.0 / 12.0) + 49.0 / 16.0)
+                    - 343.0 / 48.0
+                )
+                + 2401.0 / 384.0
+            )
+            return torch.where(
+                x < 0.5,
+                h_low,
+                torch.where(
+                    x < 1.5, h_mid_low, torch.where(x < 2.5, h_mid_up, h_up)
+                ),
+            )
         if self.order == 7:
             h_low = square(x)
-            h_low = h_low * (h_low*(x * (7./24.) - 5./6.) + 4./3.) - 2./3.
-            h_mid_low = - (x * (x * (x * (x * (x * (7./40.) - 3./2.) + 14./3.)
-                           - 6.) + 7./3.) + 1./5.)
-            h_mid_up = (x * (x * (x * (x * (x * (7./120.) - 5./6.) + 14./3.)
-                        - 38./3.) + 49./3.) - 23./3.)
-            h_up = - (x * (x * (x * (x * (x/120. - 1./6.) + 4./3.) - 16./3.)
-                      + 32./3.) - 128./15.)
-            return torch.where(x < 1, h_low,
-                               torch.where(x < 2, h_mid_low,
-                                           torch.where(x < 3, h_mid_up,
-                                                       h_up)))
+            h_low = (
+                h_low * (h_low * (x * (7.0 / 24.0) - 5.0 / 6.0) + 4.0 / 3.0)
+                - 2.0 / 3.0
+            )
+            h_mid_low = -(
+                x
+                * (
+                    x
+                    * (
+                        x * (x * (x * (7.0 / 40.0) - 3.0 / 2.0) + 14.0 / 3.0)
+                        - 6.0
+                    )
+                    + 7.0 / 3.0
+                )
+                + 1.0 / 5.0
+            )
+            h_mid_up = (
+                x
+                * (
+                    x
+                    * (
+                        x * (x * (x * (7.0 / 120.0) - 5.0 / 6.0) + 14.0 / 3.0)
+                        - 38.0 / 3.0
+                    )
+                    + 49.0 / 3.0
+                )
+                - 23.0 / 3.0
+            )
+            h_up = -(
+                x
+                * (
+                    x
+                    * (
+                        x * (x * (x / 120.0 - 1.0 / 6.0) + 4.0 / 3.0)
+                        - 16.0 / 3.0
+                    )
+                    + 32.0 / 3.0
+                )
+                - 128.0 / 15.0
+            )
+            return torch.where(
+                x < 1,
+                h_low,
+                torch.where(
+                    x < 2, h_mid_low, torch.where(x < 3, h_mid_up, h_up)
+                ),
+            )
         raise NotImplementedError
-

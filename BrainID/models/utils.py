@@ -8,7 +8,7 @@ class SpatialTransformer(nn.Module):
     N-D Spatial Transformer
     """
 
-    def __init__(self, size, mode='bilinear'):
+    def __init__(self, size, mode="bilinear"):
         super().__init__()
 
         self.mode = mode
@@ -25,7 +25,7 @@ class SpatialTransformer(nn.Module):
         # is included when saving weights to disk, so the model files are way bigger
         # than they need to be. so far, there does not appear to be an elegant solution.
         # see: https://discuss.pytorch.org/t/how-to-register-buffer-without-polluting-state-dict
-        self.register_buffer('grid', grid)
+        self.register_buffer("grid", grid)
 
     def forward(self, src, flow):
         # new locations
@@ -34,7 +34,9 @@ class SpatialTransformer(nn.Module):
 
         # need to normalize grid values to [-1, 1] for resampler
         for i in range(len(shape)):
-            new_locs[:, i, ...] = 2 * (new_locs[:, i, ...] / (shape[i] - 1) - 0.5)
+            new_locs[:, i, ...] = 2 * (
+                new_locs[:, i, ...] / (shape[i] - 1) - 0.5
+            )
 
         # move channels dim to last position
         # also not sure why, but the channels need to be reversed
@@ -45,7 +47,9 @@ class SpatialTransformer(nn.Module):
             new_locs = new_locs.permute(0, 2, 3, 4, 1)
             new_locs = new_locs[..., [2, 1, 0]]
 
-        return nnf.grid_sample(src, new_locs, align_corners=True, mode=self.mode)
+        return nnf.grid_sample(
+            src, new_locs, align_corners=True, mode=self.mode
+        )
 
 
 class VecInt(nn.Module):
@@ -56,9 +60,9 @@ class VecInt(nn.Module):
     def __init__(self, inshape, nsteps):
         super().__init__()
 
-        assert nsteps >= 0, 'nsteps should be >= 0, found: %d' % nsteps
+        assert nsteps >= 0, "nsteps should be >= 0, found: %d" % nsteps
         self.nsteps = nsteps
-        self.scale = 1.0 / (2 ** self.nsteps)
+        self.scale = 1.0 / (2**self.nsteps)
         self.transformer = SpatialTransformer(inshape)
 
     def forward(self, vec):
@@ -76,22 +80,26 @@ class ResizeTransform(nn.Module):
     def __init__(self, vel_resize, ndims):
         super().__init__()
         self.factor = 1.0 / vel_resize
-        self.mode = 'linear'
+        self.mode = "linear"
         if ndims == 2:
-            self.mode = 'bi' + self.mode
+            self.mode = "bi" + self.mode
         elif ndims == 3:
-            self.mode = 'tri' + self.mode
+            self.mode = "tri" + self.mode
 
     def forward(self, x):
         if self.factor < 1:
             # resize first to save memory
-            x = nnf.interpolate(x, align_corners=True, scale_factor=self.factor, mode=self.mode)
+            x = nnf.interpolate(
+                x, align_corners=True, scale_factor=self.factor, mode=self.mode
+            )
             x = self.factor * x
 
         elif self.factor > 1:
             # multiply first to save memory
             x = self.factor * x
-            x = nnf.interpolate(x, align_corners=True, scale_factor=self.factor, mode=self.mode)
+            x = nnf.interpolate(
+                x, align_corners=True, scale_factor=self.factor, mode=self.mode
+            )
 
         # don't do anything if resize is 1
         return x

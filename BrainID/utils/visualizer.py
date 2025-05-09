@@ -5,6 +5,7 @@ import os
 from lightning.pytorch.callbacks import Callback
 import pdb
 
+
 def get_slices(
     volume,
     directions=("axial", "coronal", "sagittal"),
@@ -28,7 +29,7 @@ def get_slices(
                 for i in range(-half, half + 1)
             ]
             images = [volume[:, :, idx] for idx in indices]
-            
+
         elif direction == "coronal":
             center = H // 2
             indices = [
@@ -153,11 +154,15 @@ class ValidationFeaturesSnapshot(Callback):
 
         slices_dict = {
             "Input": get_slices(input_vol, directions, self.num_slices),
-            "Prediction": get_slices(pred_vol, directions, self.num_slices) if "pred_image" in batch else None,
+            "Prediction": (
+                get_slices(pred_vol, directions, self.num_slices)
+                if "pred_image" in batch
+                else None
+            ),
             "Target": get_slices(target_vol, directions, self.num_slices),
         }
-        
-        n_rows = 3 + 32 
+
+        n_rows = 3 + 32
         if "pred_image" not in batch:
             del slices_dict["Prediction"]
             n_rows = 2 + 32
@@ -165,8 +170,7 @@ class ValidationFeaturesSnapshot(Callback):
             slices_dict[f"Feature{i+1}"] = get_slices(
                 feat_vols[i], directions, self.num_slices
             )
-        
-        
+
         fig, axes = plt.subplots(
             n_rows,
             self.num_slices * len(directions),
@@ -253,7 +257,7 @@ class QCValidationSnapshot(Callback):
             for d_idx, direction in enumerate(directions):
                 for r_idx, key in enumerate(slices_dict.keys()):
                     row = d_idx * n_rows + r_idx
-                    mid_slice = (self.num_slices-1) // 2
+                    mid_slice = (self.num_slices - 1) // 2
                     for s_idx, img in enumerate(slices_dict[key][direction]):
                         col = batch_idx * self.num_slices + s_idx
                         ax = axes[row, col]
@@ -266,7 +270,10 @@ class QCValidationSnapshot(Callback):
 
                         # Set title for middle slice
                         if row == 0 and s_idx == mid_slice:
-                            ax.set_title(f"Quality: {pred:.2f} (GT: {target})", fontsize=8)
+                            ax.set_title(
+                                f"Quality: {pred:.2f} (GT: {target})",
+                                fontsize=8,
+                            )
 
         plt.tight_layout()
         save_path = os.path.join(
@@ -276,6 +283,7 @@ class QCValidationSnapshot(Callback):
         plt.savefig(save_path, dpi=150)
 
         plt.close()
+
 
 class SegValidationSnapshot(Callback):
     def __init__(self, output_dir, num_slices=5):
@@ -313,7 +321,7 @@ class SegValidationSnapshot(Callback):
             sample_idx = torch.randint(len(batch["inputs"]), (1,)).item()
             input_vol = batch["inputs"][sample_idx].squeeze()
             pred_seg = batch["pred_seg"][sample_idx].squeeze()
-            
+
             pred_seg = torch.argmax(pred_seg, dim=0)
             target_vol = batch["image"].squeeze()
             target_seg = batch["label"].squeeze()
@@ -322,12 +330,8 @@ class SegValidationSnapshot(Callback):
             slices_dict = {
                 "Input": get_slices(input_vol, directions, self.num_slices),
                 "Target": get_slices(target_vol, directions, self.num_slices),
-                "Seg": get_slices(
-                    pred_seg, directions, self.num_slices
-                ),
-                "GT seg": get_slices(
-                    target_seg, directions, self.num_slices
-                ),
+                "Seg": get_slices(pred_seg, directions, self.num_slices),
+                "GT seg": get_slices(target_seg, directions, self.num_slices),
                 "Feature1": get_slices(
                     feat_vols[0], directions, self.num_slices
                 ),

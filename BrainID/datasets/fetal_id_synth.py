@@ -4,6 +4,7 @@ from typing import (
     Sized,
 )
 import torch
+
 # from fetalsynthgen.definitions import GeneratorParams
 # from fetalsynthgen.dataset import FetalBIDSDataset, SynthDataset
 from torch.utils.data import Dataset
@@ -31,7 +32,6 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
         load_image: bool = False,
         image_as_intensity: bool = False,
         mask_image: bool = False,
-        
     ):
         """
 
@@ -51,7 +51,14 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
             image_as_intensity: If **True**, the image is used as the intensity prior,
                 instead of sampling the intensities from the seeds. Default is **False**.
         """
-        super().__init__(bids_path, generator_mild, seed_path, sub_list, load_image, image_as_intensity)
+        super().__init__(
+            bids_path,
+            generator_mild,
+            seed_path,
+            sub_list,
+            load_image,
+            image_as_intensity,
+        )
         self.seed_path = (
             Path(seed_path) if isinstance(seed_path, str) else None
         )
@@ -116,14 +123,18 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
 
         # Generate the contrast image
 
-        seeds, selected_seeds = self.generator_mild.intensity_generator.load_seeds(
-            seeds=seeds, genparams=genparams.get("selected_seeds", {})
+        seeds, selected_seeds = (
+            self.generator_mild.intensity_generator.load_seeds(
+                seeds=seeds, genparams=genparams.get("selected_seeds", {})
+            )
         )
-        xx2, yy2, zz2, flip, deform_params = self.generator_mild.spatial_deform.generate_deformation_and_flip(
-            image_shape=seeds.shape,
-            genparams=genparams,
+        xx2, yy2, zz2, flip, deform_params = (
+            self.generator_mild.spatial_deform.generate_deformation_and_flip(
+                image_shape=seeds.shape,
+                genparams=genparams,
+            )
         )
-     
+
         # ensure that tensors are on the same device
 
         device = self.generator_mild.device
@@ -131,7 +142,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
         segm_run = segm.to(device).clone()
         samples = []
         synth_params_defaultdict = defaultdict(list)
-        for i in range(self.n_mild_samples+self.n_severe_samples):
+        for i in range(self.n_mild_samples + self.n_severe_samples):
             if i < self.n_mild_samples:
                 generator = self.generator_mild
             else:
@@ -148,7 +159,11 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
             output = output.to(device)
             affine = output.affine
             # 2. Spatially deform the data
-            im_out, segm_out, output = self.generator.spatial_deform.apply_deformation_and_flip(im_run, segm_run, output, xx2, yy2, zz2, flip)
+            im_out, segm_out, output = (
+                self.generator.spatial_deform.apply_deformation_and_flip(
+                    im_run, segm_run, output, xx2, yy2, zz2, flip
+                )
+            )
             synth_params = {
                 "selected_seeds": selected_seeds,
                 "seed_intensities": seed_intensities,
@@ -157,16 +172,16 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
 
             # generate the synthetic data
             gen_output, synth_params_aug = generator.augment(
-                image=output, segmentation=segm_out,  genparams=genparams
+                image=output, segmentation=segm_out, genparams=genparams
             )
-        
+
             # scale the images to [0, 1]
             gen_output = self.scaler(gen_output)
             image = self.scaler(image) if image is not None else None
 
             # ensure image and segmentation are on the cpu
             gen_output = gen_output.cpu()
-            
+
             samples.append(gen_output.unsqueeze(0))
             synth_params = synth_params.update(synth_params_aug)
             for k, v in synth_params_aug.items():
@@ -193,7 +208,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
         }
 
         return data_out
-    
+
     def __getitem__(self, idx, genparams: dict = {}):
 
         return self.sample(idx, genparams)
@@ -259,11 +274,15 @@ class RandomBlockPatchFetalDataset(Dataset):
             "slice_patch": slice_idx,
         }
         for sample in batch["input"]:
-            subjects_patch["input"].append(sample[:, slice_[0], slice_[1], slice_[2]])
+            subjects_patch["input"].append(
+                sample[:, slice_[0], slice_[1], slice_[2]]
+            )
         subjects_patch["image"] = batch["image"][
             :, slice_[0], slice_[1], slice_[2]
         ]
-        subjects_patch["seg"] = batch["seg"][:, slice_[0], slice_[1], slice_[2]]
+        subjects_patch["seg"] = batch["seg"][
+            :, slice_[0], slice_[1], slice_[2]
+        ]
         subjects_patch["shp"] = torch.tensor(subjects_patch["image"].shape)
         subjects_patch["shp_init"] = torch.tensor(batch["image"].shape)
 
@@ -315,7 +334,7 @@ class BlockRandomSampler(Sampler[int]):
 
     def __len__(self) -> int:
         return self.num_samples
-    
+
 
 class FetalSynthIDDataset(FetalSynthDataset):
     def __init__(
@@ -327,7 +346,14 @@ class FetalSynthIDDataset(FetalSynthDataset):
         load_image: bool = False,
         image_as_intensity: bool = False,
     ):
-        super().__init__(bids_path, generator, seed_path, sub_list, load_image, image_as_intensity)
+        super().__init__(
+            bids_path,
+            generator,
+            seed_path,
+            sub_list,
+            load_image,
+            image_as_intensity,
+        )
 
     def sample(self, idx, genparams: dict = {}) -> tuple[dict, dict]:
         """

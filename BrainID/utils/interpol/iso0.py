@@ -1,9 +1,16 @@
 """Isotropic 0-th order splines ("nearest neighbor")"""
+
 import torch
 from .bounds import Bound
-from .jit_utils import (sub2ind_list, make_sign,
-                        inbounds_mask_3d, inbounds_mask_2d, inbounds_mask_1d)
+from .jit_utils import (
+    sub2ind_list,
+    make_sign,
+    inbounds_mask_3d,
+    inbounds_mask_2d,
+    inbounds_mask_1d,
+)
 from typing import List, Optional
+
 Tensor = torch.Tensor
 
 
@@ -31,7 +38,7 @@ def pull3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 3
     boundx, boundy, boundz = bound
-    oshape = g.shape[-dim-1:-1]
+    oshape = g.shape[-dim - 1 : -1]
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy, gz = g.unbind(-1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -62,8 +69,13 @@ def pull3d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def push3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-           extrapolate: int = 1):
+def push3d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX, iY, iZ) tensor
     g: (B, iX, iY, iZ, 3) tensor
@@ -74,8 +86,8 @@ def push3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     """
     dim = 3
     boundx, boundy, boundz = bound
-    if inp.shape[-dim:] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
+    if inp.shape[-dim:] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
     ishape = inp.shape[-dim:]
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy, gz = torch.unbind(g, -1)
@@ -96,7 +108,9 @@ def push3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     gz, signz = get_indices(gz, nz, boundz)
 
     # scatter
-    out = torch.zeros([batch, channel, nx*ny*nz], dtype=inp.dtype, device=inp.device)
+    out = torch.zeros(
+        [batch, channel, nx * ny * nz], dtype=inp.dtype, device=inp.device
+    )
     idx = sub2ind_list([gx, gy, gz], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
     sign = make_sign([signx, signy, signz])
@@ -128,7 +142,7 @@ def pull2d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 2
     boundx, boundy = bound
-    oshape = g.shape[-dim-1:-1]
+    oshape = g.shape[-dim - 1 : -1]
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy = g.unbind(-1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -158,8 +172,13 @@ def pull2d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def push2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-           extrapolate: int = 1):
+def push2d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX, iY) tensor
     g: (B, iX, iY, 2) tensor
@@ -170,8 +189,8 @@ def push2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     """
     dim = 2
     boundx, boundy = bound
-    if inp.shape[-dim:] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
+    if inp.shape[-dim:] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
     ishape = inp.shape[-dim:]
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy = torch.unbind(g, -1)
@@ -191,7 +210,9 @@ def push2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     gy, signy = get_indices(gy, ny, boundy)
 
     # scatter
-    out = torch.zeros([batch, channel, nx*ny], dtype=inp.dtype, device=inp.device)
+    out = torch.zeros(
+        [batch, channel, nx * ny], dtype=inp.dtype, device=inp.device
+    )
     idx = sub2ind_list([gx, gy], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
     sign = make_sign([signx, signy])
@@ -223,7 +244,7 @@ def pull1d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 1
     boundx = bound[0]
-    oshape = g.shape[-dim-1:-1]
+    oshape = g.shape[-dim - 1 : -1]
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx = g.squeeze(-1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -252,8 +273,13 @@ def pull1d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def push1d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-           extrapolate: int = 1):
+def push1d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX) tensor
     g: (B, iX, 1) tensor
@@ -264,8 +290,8 @@ def push1d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     """
     dim = 1
     boundx = bound[0]
-    if inp.shape[-dim:] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
+    if inp.shape[-dim:] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
     ishape = inp.shape[-dim:]
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx = g.squeeze(-1)
@@ -315,17 +341,23 @@ def grad(inp, g, bound: List[Bound], extrapolate: int = 1):
     returns: (B, C, *oshape, D) tensor
     """
     dim = g.shape[-1]
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     batch = max(inp.shape[0], g.shape[0])
     channel = inp.shape[1]
 
-    return torch.zeros([batch, channel] + oshape + [dim],
-                       dtype=inp.dtype, device=inp.device)
+    return torch.zeros(
+        [batch, channel] + oshape + [dim], dtype=inp.dtype, device=inp.device
+    )
 
 
 @torch.jit.script
-def pushgrad(inp, g, shape: Optional[List[int]], bound: List[Bound],
-             extrapolate: int = 1):
+def pushgrad(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, *ishape, D) tensor
     g: (B, *ishape, D) tensor
@@ -335,9 +367,9 @@ def pushgrad(inp, g, shape: Optional[List[int]], bound: List[Bound],
     returns: (B, C, *shape) tensor
     """
     dim = g.shape[-1]
-    if inp.shape[-dim-1:-1] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
-    ishape = inp.shape[-dim-1:-1]
+    if inp.shape[-dim - 1 : -1] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
+    ishape = inp.shape[-dim - 1 : -1]
     batch = max(inp.shape[0], g.shape[0])
     channel = inp.shape[1]
 
@@ -345,8 +377,9 @@ def pushgrad(inp, g, shape: Optional[List[int]], bound: List[Bound],
         shape = ishape
     shape = list(shape)
 
-    return torch.zeros([batch, channel] + shape,
-                       dtype=inp.dtype, device=inp.device)
+    return torch.zeros(
+        [batch, channel] + shape, dtype=inp.dtype, device=inp.device
+    )
 
 
 @torch.jit.script
@@ -359,10 +392,13 @@ def hess(inp, g, bound: List[Bound], extrapolate: int = 1):
     returns: (B, C, *oshape, D, D) tensor
     """
     dim = g.shape[-1]
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     batch = max(inp.shape[0], g.shape[0])
     channel = inp.shape[1]
 
-    return torch.zeros([batch, channel] + oshape + [dim, dim],
-                       dtype=inp.dtype, device=inp.device)
+    return torch.zeros(
+        [batch, channel] + oshape + [dim, dim],
+        dtype=inp.dtype,
+        device=inp.device,
+    )

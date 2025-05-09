@@ -15,12 +15,12 @@ class BrainIDModel(LightningModule):
         task: str,
         backbone: torch.nn.Module,
         head: torch.nn.Module,
-        processor: list[torch.nn.Module|None],
+        processor: list[torch.nn.Module | None],
         criterion: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         n_batches_vis: int = 3,
-        ) -> None:
+    ) -> None:
         """Initialize a UnetModule.
 
         :param net: The model to train.
@@ -43,8 +43,8 @@ class BrainIDModel(LightningModule):
 
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
-        self.input_key = "input" #if self.task != "seg" else "image"
-        
+        self.input_key = "input"  # if self.task != "seg" else "image"
+
     def forward(self, samples: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
 
@@ -58,13 +58,12 @@ class BrainIDModel(LightningModule):
         # outputs = [{"image": x["image"]} for x in outputs]
         return outputs
 
-    
     def return_dict_copy(self, dictionary, device):
         dictionary = nested_dict_to_device(dictionary, device)
         dict_copy = nested_dict_copy(dictionary)
         del dictionary
         return dict_copy
-    
+
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -86,7 +85,11 @@ class BrainIDModel(LightningModule):
 
         loss = self.criterion(outputs, subjects, samples)
 
-        return loss, self.return_dict_copy(outputs, "cpu"), self.return_dict_copy(subjects, "cpu")
+        return (
+            loss,
+            self.return_dict_copy(outputs, "cpu"),
+            self.return_dict_copy(subjects, "cpu"),
+        )
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -103,11 +106,15 @@ class BrainIDModel(LightningModule):
         # update and log metrics
         self.train_loss(loss)
         self.log(
-            "train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True
+            "train/loss",
+            self.train_loss,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
         )
-        
+
         # return loss or backpropagation will fail
-        return {"loss": loss , "preds": preds}
+        return {"loss": loss, "preds": preds}
 
     def validation_step(
         self,
@@ -135,17 +142,20 @@ class BrainIDModel(LightningModule):
             add_dataloader_idx=False,
         )
 
-        if batch_idx < self.n_batches_vis:            
+        if batch_idx < self.n_batches_vis:
             preds_save = {
-                "pred_" + k : [p[k] for p in preds] for k in preds[0].keys()
+                "pred_" + k: [p[k] for p in preds] for k in preds[0].keys()
             }
-            self.visualization_data.append({
-                "inputs": [x.detach().cpu() for x in batch[self.input_key]],
-                "batch_idx": batch_idx,
-                **targets,
-                **preds_save,
-            })
-
+            self.visualization_data.append(
+                {
+                    "inputs": [
+                        x.detach().cpu() for x in batch[self.input_key]
+                    ],
+                    "batch_idx": batch_idx,
+                    **targets,
+                    **preds_save,
+                }
+            )
 
         return {"loss": loss, "preds": preds}
 
@@ -162,7 +172,9 @@ class BrainIDModel(LightningModule):
         """
         if ckpt_path is not None:
             # Load the checkpoint for the feature extractor -- The ckpt will be the
-            checkpoint = torch.load(ckpt_path, weights_only=False)["state_dict"]
+            checkpoint = torch.load(ckpt_path, weights_only=False)[
+                "state_dict"
+            ]
             # Extract and match the keys that start with model.backbone
             # and remove the prefix "model.backbone."
             # This is because the checkpoint was saved with a different prefix
@@ -173,9 +185,7 @@ class BrainIDModel(LightningModule):
                 if k.startswith("model.backbone.")
             }
 
-            self.model.backbone.load_state_dict(
-                checkpoint
-            )
+            self.model.backbone.load_state_dict(checkpoint)
 
     def configure_optimizers(self):
         """Configure the optimizer and learning rate scheduler for training.

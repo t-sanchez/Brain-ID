@@ -1,4 +1,5 @@
 """A lot of utility functions for TorchScript"""
+
 import torch
 import os
 from typing import List, Tuple, Optional
@@ -95,12 +96,13 @@ def list_sum_tensor(x: List[Tensor]) -> Tensor:
 def list_reverse_int(x: List[int]) -> List[int]:
     if len(x) == 0:
         return x
-    return [x[i] for i in range(-1, -len(x)-1, -1)]
+    return [x[i] for i in range(-1, -len(x) - 1, -1)]
 
 
 @torch.jit.script
-def list_cumprod_int(x: List[int], reverse: bool = False,
-                     exclusive: bool = False) -> List[int]:
+def list_cumprod_int(
+    x: List[int], reverse: bool = False, exclusive: bool = False
+) -> List[int]:
     if len(x) == 0:
         lx: List[int] = []
         return lx
@@ -124,8 +126,10 @@ def movedim1(x, source: int, destination: int):
     source = dim + source if source < 0 else source
     destination = dim + destination if destination < 0 else destination
     permutation = [d for d in range(dim)]
-    permutation = permutation[:source] + permutation[source+1:]
-    permutation = permutation[:destination] + [source] + permutation[destination:]
+    permutation = permutation[:source] + permutation[source + 1 :]
+    permutation = (
+        permutation[:destination] + [source] + permutation[destination:]
+    )
     return x.permute(permutation)
 
 
@@ -189,21 +193,27 @@ def sub2ind_list(subs: List[Tensor], shape: List[int]):
         ind += i * s
     return ind
 
+
 # floor_divide returns wrong results for negative values, because it truncates
 # instead of performing a proper floor. In recent version of pytorch, it is
 # advised to use div(..., rounding_mode='trunc'|'floor') instead.
 # Here, we only use floor_divide on positive values so we do not care.
-if torch_version('>=', [1, 8]):
+if torch_version(">=", [1, 8]):
+
     @torch.jit.script
     def floor_div(x, y) -> torch.Tensor:
-        return torch.div(x, y, rounding_mode='floor')
+        return torch.div(x, y, rounding_mode="floor")
+
     @torch.jit.script
     def floor_div_int(x, y: int) -> torch.Tensor:
-        return torch.div(x, y, rounding_mode='floor')
+        return torch.div(x, y, rounding_mode="floor")
+
 else:
+
     @torch.jit.script
     def floor_div(x, y) -> torch.Tensor:
         return (x / y).floor_()
+
     @torch.jit.script
     def floor_div_int(x, y: int) -> torch.Tensor:
         return (x / y).floor_()
@@ -233,14 +243,15 @@ def ind2sub(ind, shape: List[int]):
     sub.copy_(ind)
     for d in range(len(shape)):
         if d > 0:
-            sub[d] = torch.remainder(sub[d], stride[d-1])
+            sub[d] = torch.remainder(sub[d], stride[d - 1])
         sub[d] = floor_div_int(sub[d], stride[d])
     return sub
 
 
 @torch.jit.script
-def inbounds_mask_3d(extrapolate: int, gx, gy, gz, nx: int, ny: int, nz: int) \
-        -> Optional[Tensor]:
+def inbounds_mask_3d(
+    extrapolate: int, gx, gy, gz, nx: int, ny: int, nz: int
+) -> Optional[Tensor]:
     # mask of inbounds voxels
     mask: Optional[Tensor] = None
     if extrapolate in (0, 2):  # no / hist
@@ -248,16 +259,22 @@ def inbounds_mask_3d(extrapolate: int, gx, gy, gz, nx: int, ny: int, nz: int) \
         threshold = tiny
         if extrapolate == 2:
             threshold = 0.5 + tiny
-        mask = ((gx > -threshold) & (gx < nx - 1 + threshold) &
-                (gy > -threshold) & (gy < ny - 1 + threshold) &
-                (gz > -threshold) & (gz < nz - 1 + threshold))
+        mask = (
+            (gx > -threshold)
+            & (gx < nx - 1 + threshold)
+            & (gy > -threshold)
+            & (gy < ny - 1 + threshold)
+            & (gz > -threshold)
+            & (gz < nz - 1 + threshold)
+        )
         return mask
     return mask
 
 
 @torch.jit.script
-def inbounds_mask_2d(extrapolate: int, gx, gy, nx: int, ny: int) \
-        -> Optional[Tensor]:
+def inbounds_mask_2d(
+    extrapolate: int, gx, gy, nx: int, ny: int
+) -> Optional[Tensor]:
     # mask of inbounds voxels
     mask: Optional[Tensor] = None
     if extrapolate in (0, 2):  # no / hist
@@ -265,8 +282,12 @@ def inbounds_mask_2d(extrapolate: int, gx, gy, nx: int, ny: int) \
         threshold = tiny
         if extrapolate == 2:
             threshold = 0.5 + tiny
-        mask = ((gx > -threshold) & (gx < nx - 1 + threshold) &
-                (gy > -threshold) & (gy < ny - 1 + threshold))
+        mask = (
+            (gx > -threshold)
+            & (gx < nx - 1 + threshold)
+            & (gy > -threshold)
+            & (gy < ny - 1 + threshold)
+        )
         return mask
     return mask
 
@@ -287,7 +308,7 @@ def inbounds_mask_1d(extrapolate: int, gx, nx: int) -> Optional[Tensor]:
 
 @torch.jit.script
 def make_sign(sign: List[Optional[Tensor]]) -> Optional[Tensor]:
-    is_none : List[bool] = [s is None for s in sign]
+    is_none: List[bool] = [s is None for s in sign]
     if list_all(is_none):
         return None
     filt_sign: List[Tensor] = []
@@ -374,8 +395,8 @@ def dot_multi(x, y, dim: List[int], keepdim: bool = False):
     for d in dim:
         x = movedim1(x, d, -1)
         y = movedim1(y, d, -1)
-    x = x.reshape(x.shape[:-len(dim)] + [1, -1])
-    y = y.reshape(x.shape[:-len(dim)] + [-1, 1])
+    x = x.reshape(x.shape[: -len(dim)] + [1, -1])
+    y = y.reshape(x.shape[: -len(dim)] + [-1, 1])
     dt = torch.matmul(x, y).squeeze(-1).squeeze(-1)
     if keepdim:
         for d in dim:
@@ -383,20 +404,24 @@ def dot_multi(x, y, dim: List[int], keepdim: bool = False):
     return dt
 
 
-
 # cartesian_prod takes multiple inout tensors as input in eager mode
 # but takes a list of tensor in jit mode. This is a helper that works
 # in both cases.
-if not int(os.environ.get('PYTORCH_JIT', '1')):
+if not int(os.environ.get("PYTORCH_JIT", "1")):
     cartesian_prod = lambda x: torch.cartesian_prod(*x)
-    if torch_version('>=', (1, 10)):
+    if torch_version(">=", (1, 10)):
+
         def meshgrid_ij(x: List[torch.Tensor]) -> List[torch.Tensor]:
-            return torch.meshgrid(*x, indexing='ij')
+            return torch.meshgrid(*x, indexing="ij")
+
         def meshgrid_xy(x: List[torch.Tensor]) -> List[torch.Tensor]:
-            return torch.meshgrid(*x, indexing='xy')
+            return torch.meshgrid(*x, indexing="xy")
+
     else:
+
         def meshgrid_ij(x: List[torch.Tensor]) -> List[torch.Tensor]:
             return torch.meshgrid(*x)
+
         def meshgrid_xy(x: List[torch.Tensor]) -> List[torch.Tensor]:
             grid = torch.meshgrid(*x)
             if len(grid) > 1:
@@ -406,17 +431,22 @@ if not int(os.environ.get('PYTORCH_JIT', '1')):
 
 else:
     cartesian_prod = torch.cartesian_prod
-    if torch_version('>=', (1, 10)):
+    if torch_version(">=", (1, 10)):
+
         @torch.jit.script
         def meshgrid_ij(x: List[torch.Tensor]) -> List[torch.Tensor]:
-            return torch.meshgrid(x, indexing='ij')
+            return torch.meshgrid(x, indexing="ij")
+
         @torch.jit.script
         def meshgrid_xy(x: List[torch.Tensor]) -> List[torch.Tensor]:
-            return torch.meshgrid(x, indexing='xy')
+            return torch.meshgrid(x, indexing="xy")
+
     else:
+
         @torch.jit.script
         def meshgrid_ij(x: List[torch.Tensor]) -> List[torch.Tensor]:
             return torch.meshgrid(x)
+
         @torch.jit.script
         def meshgrid_xyt(x: List[torch.Tensor]) -> List[torch.Tensor]:
             grid = torch.meshgrid(x)
@@ -437,7 +467,7 @@ meshgrid = meshgrid_ij
 # seems to have been lifted afterwards. In torch >= 1.13, floor_divide
 # performs a correct floor division.
 # Since we only apply floor_divide ot positive values, we are fine.
-if torch_version('<', (1, 6)):
+if torch_version("<", (1, 6)):
     floor_div = torch.div
 else:
     floor_div = torch.floor_divide

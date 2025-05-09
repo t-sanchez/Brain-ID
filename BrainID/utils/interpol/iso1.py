@@ -1,15 +1,23 @@
 """Isotropic 1-st order splines ("linear/bilinear/trilinear")"""
+
 import torch
 from .bounds import Bound
-from .jit_utils import (sub2ind_list, make_sign,
-                        inbounds_mask_3d, inbounds_mask_2d, inbounds_mask_1d)
+from .jit_utils import (
+    sub2ind_list,
+    make_sign,
+    inbounds_mask_3d,
+    inbounds_mask_2d,
+    inbounds_mask_1d,
+)
 from typing import List, Tuple, Optional
+
 Tensor = torch.Tensor
 
 
 @torch.jit.script
-def get_weights_and_indices(g, n: int, bound: Bound) \
-        -> Tuple[Tensor, Tensor, Tensor, Optional[Tensor], Optional[Tensor]]:
+def get_weights_and_indices(
+    g, n: int, bound: Bound
+) -> Tuple[Tensor, Tensor, Tensor, Optional[Tensor], Optional[Tensor]]:
     g0 = g.floor().long()
     g1 = g0 + 1
     sign1 = bound.transform(g1, n)
@@ -36,7 +44,7 @@ def pull3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 3
     boundx, boundy, boundz = bound
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy, gz = g.unbind(-1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -134,8 +142,13 @@ def pull3d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def push3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-           extrapolate: int = 1):
+def push3d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX, iY, iZ) tensor
     g: (B, iX, iY, iZ, 3) tensor
@@ -146,8 +159,8 @@ def push3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     """
     dim = 3
     boundx, boundy, boundz = bound
-    if inp.shape[-dim:] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
+    if inp.shape[-dim:] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
     ishape = list(inp.shape[-dim:])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy, gz = torch.unbind(g, -1)
@@ -170,8 +183,9 @@ def push3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     gz, gz0, gz1, signz0, signz1 = get_weights_and_indices(gz, nz, boundz)
 
     # scatter
-    out = torch.zeros([batch, channel, nx*ny*nz],
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.zeros(
+        [batch, channel, nx * ny * nz], dtype=inp.dtype, device=inp.device
+    )
     # - corner 000
     idx = sub2ind_list([gx0, gy0, gz0], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -276,7 +290,7 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 3
     boundx, boundy, boundz = bound
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy, gz = torch.unbind(g, -1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -295,8 +309,11 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
     # gather
     inp = inp.reshape(list(inp.shape[:2]) + [-1])
-    out = torch.empty([batch, channel] + list(g.shape[-2:]),
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.empty(
+        [batch, channel] + list(g.shape[-2:]),
+        dtype=inp.dtype,
+        device=inp.device,
+    )
     outx, outy, outz = out.unbind(-1)
     # - corner 000
     idx = sub2ind_list([gx0, gy0, gz0], shape)
@@ -307,9 +324,9 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy0, signz0])
     if sign is not None:
         out *= sign.unsqueeze(-1)
-    outx *= - (1 - gy) * (1 - gz)
-    outy *= - (1 - gx) * (1 - gz)
-    outz *= - (1 - gx) * (1 - gy)
+    outx *= -(1 - gy) * (1 - gz)
+    outy *= -(1 - gx) * (1 - gz)
+    outz *= -(1 - gx) * (1 - gy)
     # - corner 001
     idx = sub2ind_list([gx0, gy0, gz1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -317,9 +334,9 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy0, signz1])
     if sign is not None:
         out1 *= sign
-    outx.addcmul_(out1, - (1 - gy) * gz)
-    outy.addcmul_(out1, - (1 - gx) * gz)
-    outz.addcmul_(out1,   (1 - gx) * (1 - gy))
+    outx.addcmul_(out1, -(1 - gy) * gz)
+    outy.addcmul_(out1, -(1 - gx) * gz)
+    outz.addcmul_(out1, (1 - gx) * (1 - gy))
     # - corner 010
     idx = sub2ind_list([gx0, gy1, gz0], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -327,9 +344,9 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy1, signz0])
     if sign is not None:
         out1 *= sign
-    outx.addcmul_(out1, - gy * (1 - gz))
+    outx.addcmul_(out1, -gy * (1 - gz))
     outy.addcmul_(out1, (1 - gx) * (1 - gz))
-    outz.addcmul_(out1, - (1 - gx) * gy)
+    outz.addcmul_(out1, -(1 - gx) * gy)
     # - corner 011
     idx = sub2ind_list([gx0, gy1, gz1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -337,7 +354,7 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy1, signz1])
     if sign is not None:
         out1 *= sign
-    outx.addcmul_(out1, - gy * gz)
+    outx.addcmul_(out1, -gy * gz)
     outy.addcmul_(out1, (1 - gx) * gz)
     outz.addcmul_(out1, (1 - gx) * gy)
     # - corner 100
@@ -348,8 +365,8 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     if sign is not None:
         out1 *= sign
     outx.addcmul_(out1, (1 - gy) * (1 - gz))
-    outy.addcmul_(out1, - gx * (1 - gz))
-    outz.addcmul_(out1, - gx * (1 - gy))
+    outy.addcmul_(out1, -gx * (1 - gz))
+    outz.addcmul_(out1, -gx * (1 - gy))
     # - corner 101
     idx = sub2ind_list([gx1, gy0, gz1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -358,7 +375,7 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     if sign is not None:
         out1 *= sign
     outx.addcmul_(out1, (1 - gy) * gz)
-    outy.addcmul_(out1, - gx * gz)
+    outy.addcmul_(out1, -gx * gz)
     outz.addcmul_(out1, gx * (1 - gy))
     # - corner 110
     idx = sub2ind_list([gx1, gy1, gz0], shape)
@@ -369,7 +386,7 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
         out1 *= sign
     outx.addcmul_(out1, gy * (1 - gz))
     outy.addcmul_(out1, gx * (1 - gz))
-    outz.addcmul_(out1, - gx * gy)
+    outz.addcmul_(out1, -gx * gy)
     # - corner 111
     idx = sub2ind_list([gx1, gy1, gz1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -388,8 +405,13 @@ def grad3d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-               extrapolate: int = 1):
+def pushgrad3d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX, iY, iZ, 3) tensor
     g: (B, iX, iY, iZ, 3) tensor
@@ -400,9 +422,9 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     """
     dim = 3
     boundx, boundy, boundz = bound
-    if inp.shape[-dim-1:-1] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
-    ishape = list(inp.shape[-dim-1:-1])
+    if inp.shape[-dim - 1 : -1] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
+    ishape = list(inp.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy, gz = g.unbind(-1)
     inp = inp.reshape(list(inp.shape[:2]) + [-1, dim])
@@ -424,8 +446,9 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     gz, gz0, gz1, signz0, signz1 = get_weights_and_indices(gz, nz, boundz)
 
     # scatter
-    out = torch.zeros([batch, channel, nx*ny*nz],
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.zeros(
+        [batch, channel, nx * ny * nz], dtype=inp.dtype, device=inp.device
+    )
     # - corner 000
     idx = sub2ind_list([gx0, gy0, gz0], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -436,9 +459,9 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     if mask is not None:
         out1 *= mask.unsqueeze(-1)
     out1x, out1y, out1z = out1.unbind(-1)
-    out1x *= - (1 - gy) * (1 - gz)
-    out1y *= - (1 - gx) * (1 - gz)
-    out1z *= - (1 - gx) * (1 - gy)
+    out1x *= -(1 - gy) * (1 - gz)
+    out1y *= -(1 - gx) * (1 - gz)
+    out1z *= -(1 - gx) * (1 - gy)
     out.scatter_add_(-1, idx, out1x + out1y + out1z)
     # - corner 001
     idx = sub2ind_list([gx0, gy0, gz1], shape)
@@ -450,8 +473,8 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     if mask is not None:
         out1 *= mask.unsqueeze(-1)
     out1x, out1y, out1z = out1.unbind(-1)
-    out1x *= - (1 - gy) * gz
-    out1y *= - (1 - gx) * gz
+    out1x *= -(1 - gy) * gz
+    out1y *= -(1 - gx) * gz
     out1z *= (1 - gx) * (1 - gy)
     out.scatter_add_(-1, idx, out1x + out1y + out1z)
     # - corner 010
@@ -464,9 +487,9 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     if mask is not None:
         out1 *= mask.unsqueeze(-1)
     out1x, out1y, out1z = out1.unbind(-1)
-    out1x *= - gy * (1 - gz)
+    out1x *= -gy * (1 - gz)
     out1y *= (1 - gx) * (1 - gz)
-    out1z *= - (1 - gx) * gy
+    out1z *= -(1 - gx) * gy
     out.scatter_add_(-1, idx, out1x + out1y + out1z)
     # - corner 011
     idx = sub2ind_list([gx0, gy1, gz1], shape)
@@ -478,7 +501,7 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     if mask is not None:
         out1 *= mask.unsqueeze(-1)
     out1x, out1y, out1z = out1.unbind(-1)
-    out1x *= - gy * gz
+    out1x *= -gy * gz
     out1y *= (1 - gx) * gz
     out1z *= (1 - gx) * gy
     out.scatter_add_(-1, idx, out1x + out1y + out1z)
@@ -493,8 +516,8 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
         out1 *= mask.unsqueeze(-1)
     out1x, out1y, out1z = out1.unbind(-1)
     out1x *= (1 - gy) * (1 - gz)
-    out1y *= - gx * (1 - gz)
-    out1z *= - gx * (1 - gy)
+    out1y *= -gx * (1 - gz)
+    out1z *= -gx * (1 - gy)
     out.scatter_add_(-1, idx, out1x + out1y + out1z)
     # - corner 101
     idx = sub2ind_list([gx1, gy0, gz1], shape)
@@ -507,7 +530,7 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
         out1 *= mask.unsqueeze(-1)
     out1x, out1y, out1z = out1.unbind(-1)
     out1x *= (1 - gy) * gz
-    out1y *= - gx * gz
+    out1y *= -gx * gz
     out1z *= gx * (1 - gy)
     out.scatter_add_(-1, idx, out1x + out1y + out1z)
     # - corner 110
@@ -522,7 +545,7 @@ def pushgrad3d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     out1x, out1y, out1z = out1.unbind(-1)
     out1x *= gy * (1 - gz)
     out1y *= gx * (1 - gz)
-    out1z *= - gx * gy
+    out1z *= -gx * gy
     out.scatter_add_(-1, idx, out1x + out1y + out1z)
     # - corner 111
     idx = sub2ind_list([gx1, gy1, gz1], shape)
@@ -554,7 +577,7 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 3
     boundx, boundy, boundz = bound
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy, gz = torch.unbind(g, -1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -573,8 +596,11 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
     # gather
     inp = inp.reshape(list(inp.shape[:2]) + [-1])
-    out = torch.empty([batch, channel, g.shape[-2], dim, dim],
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.empty(
+        [batch, channel, g.shape[-2], dim, dim],
+        dtype=inp.dtype,
+        device=inp.device,
+    )
     outx, outy, outz = out.unbind(-1)
     outxx, outyx, outzx = outx.unbind(-1)
     outxy, outyy, outzy = outy.unbind(-1)
@@ -591,9 +617,9 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy0, signz0])
     if sign is not None:
         out *= sign.unsqueeze(-1).unsqueeze(-1)
-    outxy *= (1 - gz)
-    outxz *= (1 - gy)
-    outyz *= (1 - gx)
+    outxy *= 1 - gz
+    outxz *= 1 - gy
+    outyz *= 1 - gx
     # - corner 001
     idx = sub2ind_list([gx0, gy0, gz1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -602,8 +628,8 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     if sign is not None:
         out1 *= sign
     outxy.addcmul_(out1, gz)
-    outxz.addcmul_(out1, - (1 - gy))
-    outyz.addcmul_(out1, - (1 - gx))
+    outxz.addcmul_(out1, -(1 - gy))
+    outyz.addcmul_(out1, -(1 - gx))
     # - corner 010
     idx = sub2ind_list([gx0, gy1, gz0], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -611,9 +637,9 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy1, signz0])
     if sign is not None:
         out1 *= sign
-    outxy.addcmul_(out1, - (1 - gz))
+    outxy.addcmul_(out1, -(1 - gz))
     outxz.addcmul_(out1, gy)
-    outyz.addcmul_(out1, - (1 - gx))
+    outyz.addcmul_(out1, -(1 - gx))
     # - corner 011
     idx = sub2ind_list([gx0, gy1, gz1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -621,8 +647,8 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy1, signz1])
     if sign is not None:
         out1 *= sign
-    outxy.addcmul_(out1, - gz)
-    outxz.addcmul_(out1, - gy)
+    outxy.addcmul_(out1, -gz)
+    outxz.addcmul_(out1, -gy)
     outyz.addcmul_(out1, (1 - gx))
     # - corner 100
     idx = sub2ind_list([gx1, gy0, gz0], shape)
@@ -631,8 +657,8 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx1, signy0, signz0])
     if sign is not None:
         out1 *= sign
-    outxy.addcmul_(out1, - (1 - gz))
-    outxz.addcmul_(out1, - (1 - gy))
+    outxy.addcmul_(out1, -(1 - gz))
+    outxz.addcmul_(out1, -(1 - gy))
     outyz.addcmul_(out1, gx)
     # - corner 101
     idx = sub2ind_list([gx1, gy0, gz1], shape)
@@ -641,9 +667,9 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx1, signy0, signz1])
     if sign is not None:
         out1 *= sign
-    outxy.addcmul_(out1, - gz)
+    outxy.addcmul_(out1, -gz)
     outxz.addcmul_(out1, (1 - gy))
-    outyz.addcmul_(out1, - gx)
+    outyz.addcmul_(out1, -gx)
     # - corner 110
     idx = sub2ind_list([gx1, gy1, gz0], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -652,8 +678,8 @@ def hess3d(inp, g, bound: List[Bound], extrapolate: int = 1):
     if sign is not None:
         out1 *= sign
     outxy.addcmul_(out1, (1 - gz))
-    outxz.addcmul_(out1, - gy)
-    outyz.addcmul_(out1, - gx)
+    outxz.addcmul_(out1, -gy)
+    outyz.addcmul_(out1, -gx)
     # - corner 111
     idx = sub2ind_list([gx1, gy1, gz1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -691,14 +717,14 @@ def pull2d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 2
     boundx, boundy = bound
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy = g.unbind(-1)
     batch = max(inp.shape[0], gx.shape[0])
     channel = inp.shape[1]
     shape = list(inp.shape[-dim:])
     nx, ny = shape
-    
+
     # mask of inbounds voxels
     mask = inbounds_mask_2d(extrapolate, gx, gy, nx, ny)
 
@@ -752,8 +778,13 @@ def pull2d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def push2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-           extrapolate: int = 1):
+def push2d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX, iY) tensor
     g: (B, iX, iY, 2) tensor
@@ -764,8 +795,8 @@ def push2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     """
     dim = 2
     boundx, boundy = bound
-    if inp.shape[-dim:] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
+    if inp.shape[-dim:] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
     ishape = list(inp.shape[-dim:])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy = torch.unbind(g, -1)
@@ -787,8 +818,9 @@ def push2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     gy, gy0, gy1, signy0, signy1 = get_weights_and_indices(gy, ny, boundy)
 
     # scatter
-    out = torch.zeros([batch, channel, nx*ny],
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.zeros(
+        [batch, channel, nx * ny], dtype=inp.dtype, device=inp.device
+    )
     # - corner 00
     idx = sub2ind_list([gx0, gy0], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -849,7 +881,7 @@ def grad2d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 2
     boundx, boundy = bound
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy = torch.unbind(g, -1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -867,8 +899,11 @@ def grad2d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
     # gather
     inp = inp.reshape(list(inp.shape[:2]) + [-1])
-    out = torch.empty([batch, channel] + list(g.shape[-2:]),
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.empty(
+        [batch, channel] + list(g.shape[-2:]),
+        dtype=inp.dtype,
+        device=inp.device,
+    )
     outx, outy = out.unbind(-1)
     # - corner 00
     idx = sub2ind_list([gx0, gy0], shape)
@@ -878,8 +913,8 @@ def grad2d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy0])
     if sign is not None:
         out *= sign.unsqueeze(-1)
-    outx *= - (1 - gy)
-    outy *= - (1 - gx)
+    outx *= -(1 - gy)
+    outy *= -(1 - gx)
     # - corner 01
     idx = sub2ind_list([gx0, gy1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -887,7 +922,7 @@ def grad2d(inp, g, bound: List[Bound], extrapolate: int = 1):
     sign = make_sign([signx0, signy1])
     if sign is not None:
         out1 *= sign
-    outx.addcmul_(out1, - gy)
+    outx.addcmul_(out1, -gy)
     outy.addcmul_(out1, (1 - gx))
     # - corner 10
     idx = sub2ind_list([gx1, gy0], shape)
@@ -897,7 +932,7 @@ def grad2d(inp, g, bound: List[Bound], extrapolate: int = 1):
     if sign is not None:
         out1 *= sign
     outx.addcmul_(out1, (1 - gy))
-    outy.addcmul_(out1, - gx)
+    outy.addcmul_(out1, -gx)
     # - corner 11
     idx = sub2ind_list([gx1, gy1], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -915,8 +950,13 @@ def grad2d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def pushgrad2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-               extrapolate: int = 1):
+def pushgrad2d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX, iY, 2) tensor
     g: (B, iX, iY, 2) tensor
@@ -927,9 +967,9 @@ def pushgrad2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     """
     dim = 2
     boundx, boundy = bound
-    if inp.shape[-dim-1:-1] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
-    ishape = list(inp.shape[-dim-1:-1])
+    if inp.shape[-dim - 1 : -1] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
+    ishape = list(inp.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy = g.unbind(-1)
     inp = inp.reshape(list(inp.shape[:2]) + [-1, dim])
@@ -950,8 +990,9 @@ def pushgrad2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     gy, gy0, gy1, signy0, signy1 = get_weights_and_indices(gy, ny, boundy)
 
     # scatter
-    out = torch.zeros([batch, channel, nx*ny],
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.zeros(
+        [batch, channel, nx * ny], dtype=inp.dtype, device=inp.device
+    )
     # - corner 00
     idx = sub2ind_list([gx0, gy0], shape)
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -962,8 +1003,8 @@ def pushgrad2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     if mask is not None:
         out1 *= mask.unsqueeze(-1)
     out1x, out1y = out1.unbind(-1)
-    out1x *= - (1 - gy)
-    out1y *= - (1 - gx)
+    out1x *= -(1 - gy)
+    out1y *= -(1 - gx)
     out.scatter_add_(-1, idx, out1x + out1y)
     # - corner 01
     idx = sub2ind_list([gx0, gy1], shape)
@@ -975,8 +1016,8 @@ def pushgrad2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     if mask is not None:
         out1 *= mask.unsqueeze(-1)
     out1x, out1y = out1.unbind(-1)
-    out1x *= - gy
-    out1y *= (1 - gx)
+    out1x *= -gy
+    out1y *= 1 - gx
     out.scatter_add_(-1, idx, out1x + out1y)
     # - corner 10
     idx = sub2ind_list([gx1, gy0], shape)
@@ -988,8 +1029,8 @@ def pushgrad2d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     if mask is not None:
         out1 *= mask.unsqueeze(-1)
     out1x, out1y = out1.unbind(-1)
-    out1x *= (1 - gy)
-    out1y *= - gx
+    out1x *= 1 - gy
+    out1y *= -gx
     out.scatter_add_(-1, idx, out1x + out1y)
     # - corner 11
     idx = sub2ind_list([gx1, gy1], shape)
@@ -1020,7 +1061,7 @@ def hess2d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 2
     boundx, boundy = bound
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx, gy = torch.unbind(g, -1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -1038,8 +1079,11 @@ def hess2d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
     # gather
     inp = inp.reshape(list(inp.shape[:2]) + [-1])
-    out = torch.empty([batch, channel, g.shape[-2], dim, dim],
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.empty(
+        [batch, channel, g.shape[-2], dim, dim],
+        dtype=inp.dtype,
+        device=inp.device,
+    )
     outx, outy = out.unbind(-1)
     outxx, outyx = outx.unbind(-1)
     outxy, outyy = outy.unbind(-1)
@@ -1102,7 +1146,7 @@ def pull1d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 1
     boundx = bound[0]
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx = g.squeeze(-1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -1144,8 +1188,13 @@ def pull1d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def push1d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-           extrapolate: int = 1):
+def push1d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX, iY) tensor
     g: (B, iX, iY, 2) tensor
@@ -1156,8 +1205,8 @@ def push1d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     """
     dim = 1
     boundx = bound[0]
-    if inp.shape[-dim:] != g.shape[-dim-1:-1]:
-        raise ValueError('Input and grid should have the same spatial shape')
+    if inp.shape[-dim:] != g.shape[-dim - 1 : -1]:
+        raise ValueError("Input and grid should have the same spatial shape")
     ishape = list(inp.shape[-dim:])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx = g.squeeze(-1)
@@ -1178,8 +1227,7 @@ def push1d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     gx, gx0, gx1, signx0, signx1 = get_weights_and_indices(gx, nx, boundx)
 
     # scatter
-    out = torch.zeros([batch, channel, nx],
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.zeros([batch, channel, nx], dtype=inp.dtype, device=inp.device)
     # - corner 0
     idx = gx0
     idx = idx.expand([batch, channel, idx.shape[-1]])
@@ -1218,7 +1266,7 @@ def grad1d(inp, g, bound: List[Bound], extrapolate: int = 1):
     """
     dim = 1
     boundx = bound[0]
-    oshape = list(g.shape[-dim-1:-1])
+    oshape = list(g.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx = g.squeeze(-1)
     batch = max(inp.shape[0], gx.shape[0])
@@ -1235,8 +1283,11 @@ def grad1d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
     # gather
     inp = inp.reshape(list(inp.shape[:2]) + [-1])
-    out = torch.empty([batch, channel] + list(g.shape[-2:]),
-                      dtype=inp.dtype, device=inp.device)
+    out = torch.empty(
+        [batch, channel] + list(g.shape[-2:]),
+        dtype=inp.dtype,
+        device=inp.device,
+    )
     outx = out.squeeze(-1)
     # - corner 0
     idx = gx0
@@ -1262,8 +1313,13 @@ def grad1d(inp, g, bound: List[Bound], extrapolate: int = 1):
 
 
 @torch.jit.script
-def pushgrad1d(inp, g, shape: Optional[List[int]], bound: List[Bound],
-               extrapolate: int = 1):
+def pushgrad1d(
+    inp,
+    g,
+    shape: Optional[List[int]],
+    bound: List[Bound],
+    extrapolate: int = 1,
+):
     """
     inp: (B, C, iX, 1) tensor
     g: (B, iX, 1) tensor
@@ -1275,8 +1331,8 @@ def pushgrad1d(inp, g, shape: Optional[List[int]], bound: List[Bound],
     dim = 1
     boundx = bound[0]
     if inp.shape[-2] != g.shape[-2]:
-        raise ValueError('Input and grid should have the same spatial shape')
-    ishape = list(inp.shape[-dim-1:-1])
+        raise ValueError("Input and grid should have the same spatial shape")
+    ishape = list(inp.shape[-dim - 1 : -1])
     g = g.reshape([g.shape[0], 1, -1, dim])
     gx = g.squeeze(-1)
     inp = inp.reshape(list(inp.shape[:2]) + [-1, dim])
@@ -1335,5 +1391,8 @@ def hess1d(inp, g, bound: List[Bound], extrapolate: int = 1):
     returns: (B, C, oX, 1, 1) tensor
     """
     batch = max(inp.shape[0], g.shape[0])
-    return torch.zeros([batch, inp.shape[1], g.shape[1], 1, 1],
-                       dtype=inp.dtype, device=inp.device)
+    return torch.zeros(
+        [batch, inp.shape[1], g.shape[1], 1, 1],
+        dtype=inp.dtype,
+        device=inp.device,
+    )

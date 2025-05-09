@@ -334,7 +334,13 @@ class ConvNormPoolBlock(nn.Module):
         super().__init__()
         conv, norm, pool = get_layers_fn(is_3d, norm)
         self.block = nn.Sequential(
-            conv(in_channels, out_channels, conv_kernel, stride=conv_stride, padding=conv_padding),
+            conv(
+                in_channels,
+                out_channels,
+                conv_kernel,
+                stride=conv_stride,
+                padding=conv_padding,
+            ),
             norm(out_channels),
             nn.ReLU(),
             pool(kernel_size=pool_kernel, stride=pool_stride),
@@ -424,7 +430,10 @@ class ScalarHead(nn.Module):
         n_input_fc = f_maps_list[-1] * np.prod(
             [
                 np.array(in_shape[-3:])
-                // ((pool_kernel_stride * conv_stride) ** (len(f_maps_list) - 1))
+                // (
+                    (pool_kernel_stride * conv_stride)
+                    ** (len(f_maps_list) - 1)
+                )
             ]
         )
 

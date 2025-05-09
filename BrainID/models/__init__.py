@@ -293,7 +293,7 @@ def build_schedulers(args, itr_per_epoch, lr, min_lr):
 def build_feat_model(args):
     device = args.device
     args = process_args(args, task=args.task)
-    
+
     backbone = build_backbone(args)
     head = get_head(args, args.task_f_maps, args.out_channels, True, -1)
     model = get_joiner(args.task, backbone, head)

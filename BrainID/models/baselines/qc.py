@@ -193,7 +193,3 @@ class Conv5_FC3(nn.Module):
 
     def predict(self, x):
         return self.forward(x)
-    
-
-
-

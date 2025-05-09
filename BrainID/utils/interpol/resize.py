@@ -2,7 +2,8 @@
 Resize functions (equivalent to scipy's zoom, pytorch's interpolate)
 based on grid_pull.
 """
-__all__ = ['resize']
+
+__all__ = ["resize"]
 
 from .api import grid_pull
 from .utils import make_list, meshgrid_ij
@@ -10,8 +11,15 @@ from . import backend, jitfields
 import torch
 
 
-def resize(image, factor=None, shape=None, anchor='c',
-           interpolation=1, prefilter=True, **kwargs):
+def resize(
+    image,
+    factor=None,
+    shape=None,
+    anchor="c",
+    interpolation=1,
+    prefilter=True,
+    **kwargs
+):
     """Resize an image by a factor or to a specific shape.
 
     Notes
@@ -64,8 +72,9 @@ def resize(image, factor=None, shape=None, anchor='c',
 
     """
     if backend.jitfields and jitfields.available:
-        return jitfields.resize(image, factor, shape, anchor,
-                                interpolation, prefilter, **kwargs)
+        return jitfields.resize(
+            image, factor, shape, anchor, interpolation, prefilter, **kwargs
+        )
 
     factor = make_list(factor) if factor else []
     shape = make_list(shape) if shape else []
@@ -79,42 +88,41 @@ def resize(image, factor=None, shape=None, anchor='c',
     if factor:
         factor = make_list(factor, nb_dim)
     elif not shape:
-        raise ValueError('One of `factor` or `shape` must be provided')
+        raise ValueError("One of `factor` or `shape` must be provided")
     if shape:
         shape = make_list(shape, nb_dim)
     else:
-        shape = [int(i*f) for i, f in zip(inshape, factor)]
+        shape = [int(i * f) for i, f in zip(inshape, factor)]
 
     if not factor:
-        factor = [o/i for o, i in zip(shape, inshape)]
+        factor = [o / i for o, i in zip(shape, inshape)]
 
     # compute transformation grid
     lin = []
     for anch, f, inshp, outshp in zip(anchor, factor, inshape, shape):
-        if anch == 'c':    # centers
+        if anch == "c":  # centers
             lin.append(torch.linspace(0, inshp - 1, outshp, **bck))
-        elif anch == 'e':  # edges
+        elif anch == "e":  # edges
             scale = inshp / outshp
             shift = 0.5 * (scale - 1)
-            lin.append(torch.arange(0., outshp, **bck) * scale + shift)
-        elif anch == 'f':  # first voxel
+            lin.append(torch.arange(0.0, outshp, **bck) * scale + shift)
+        elif anch == "f":  # first voxel
             # scale = 1/f
             # shift = 0
-            lin.append(torch.arange(0., outshp, **bck) / f)
-        elif anch == 'l':  # last voxel
+            lin.append(torch.arange(0.0, outshp, **bck) / f)
+        elif anch == "l":  # last voxel
             # scale = 1/f
             shift = (inshp - 1) - (outshp - 1) / f
-            lin.append(torch.arange(0., outshp, **bck) / f + shift)
+            lin.append(torch.arange(0.0, outshp, **bck) / f + shift)
         else:
-            raise ValueError('Unknown anchor {}'.format(anch))
+            raise ValueError("Unknown anchor {}".format(anch))
 
     # interpolate
-    kwargs.setdefault('bound', 'nearest')
-    kwargs.setdefault('extrapolate', True)
-    kwargs.setdefault('interpolation', interpolation)
-    kwargs.setdefault('prefilter', prefilter)
+    kwargs.setdefault("bound", "nearest")
+    kwargs.setdefault("extrapolate", True)
+    kwargs.setdefault("interpolation", interpolation)
+    kwargs.setdefault("prefilter", prefilter)
     grid = torch.stack(meshgrid_ij(*lin), dim=-1)
     resized = grid_pull(image, grid, **kwargs)
 
     return resized
-

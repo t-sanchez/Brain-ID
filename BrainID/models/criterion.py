@@ -56,11 +56,9 @@ class SetScalarCriterion(nn.Module):
     def get_losses(self, outputs, targets, *kwargs):
         losses = {}
         for loss_name in self.loss_names:
-            losses.update(
-                self.get_loss(loss_name, outputs, targets, *kwargs)
-            )
+            losses.update(self.get_loss(loss_name, outputs, targets, *kwargs))
         return losses
-    
+
     def aggregate_losses(self, losses_dict):
         weight_dict = {"loss_" + k: v for k, v in self.weight_dict.items()}
         losses = sum(
@@ -69,7 +67,7 @@ class SetScalarCriterion(nn.Module):
             if k in weight_dict
         )
         return losses
-    
+
     def forward(self, outputs_list, targets, *kwargs):
         losses_dict = self.get_losses(outputs_list, targets, *kwargs)
         loss = self.aggregate_losses(losses_dict)
@@ -125,8 +123,8 @@ class SetCriterion(nn.Module):
             self.temp_gamma = params_dict.contrastive_temperatures.gamma
 
         self.loss_map = {
-            #"seg_ce": self.loss_seg_ce,
-            #"seg_dice": self.loss_seg_dice,
+            # "seg_ce": self.loss_seg_ce,
+            # "seg_dice": self.loss_seg_dice,
             "seg_dice_ce": self.loss_seg_dice_ce,
             "dist": self.loss_dist,
             "sr": self.loss_sr,
@@ -181,12 +179,8 @@ class SetCriterion(nn.Module):
         Dice of segmentation
         """
 
-        loss_seg_dice_ce = self.dice_ce(
-            outputs["seg"],
-            targets["label"]
-        )
+        loss_seg_dice_ce = self.dice_ce(outputs["seg"], targets["label"])
         return {"loss_seg_dice_ce": loss_seg_dice_ce}
-
 
     def loss_dist(self, outputs, targets, *kwargs):
         loss_dist = self.mse(outputs["dist"], targets["dist"])
@@ -269,9 +263,7 @@ class SetCriterion(nn.Module):
     def get_losses(self, outputs, targets, *kwargs):
         losses = {}
         for loss_name in self.loss_names:
-            losses.update(
-                self.get_loss(loss_name, outputs, targets, *kwargs)
-            )
+            losses.update(self.get_loss(loss_name, outputs, targets, *kwargs))
         return losses
 
     def aggregate_losses(self, losses_dict):
@@ -312,7 +304,6 @@ class SetMultiCriterion(SetCriterion):
                     available loss_names.
         """
         super(SetMultiCriterion, self).__init__(loss_dict, params_dict, device)
-        
 
     def get_loss(self, loss_name, outputs_list, targets, samples_list):
         assert (
@@ -323,7 +314,7 @@ class SetMultiCriterion(SetCriterion):
         for i_sample, outputs in enumerate(outputs_list):
             total_loss += self.loss_map[loss_name](
                 outputs, targets, samples_list[i_sample]
-            )["loss_"+loss_name]
+            )["loss_" + loss_name]
         return {"loss_" + loss_name: total_loss / all_samples}
 
     def get_losses(self, outputs_list, targets, samples_list):

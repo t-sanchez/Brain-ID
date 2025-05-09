@@ -12,12 +12,14 @@ Note
    more efficient that "multiply and sum" because I haven't had the time
    to test them. It would be worth doing it.
 """
+
 import torch
 from typing import List, Optional, Tuple
 from .jit_utils import list_all, dot, dot_multi, pad_list_int
 from .bounds import Bound
 from .splines import Spline
 from . import iso0, iso1, nd
+
 Tensor = torch.Tensor
 
 
@@ -32,8 +34,9 @@ def make_spline(spline: List[int]) -> List[Spline]:
 
 
 # @torch.jit.script
-def grid_pull(inp, grid, bound: List[int], interpolation: List[int],
-              extrapolate: int):
+def grid_pull(
+    inp, grid, bound: List[int], interpolation: List[int], extrapolate: int
+):
     """
     inp: (B, C, *spatial_in) tensor
     grid: (B, *spatial_out, D) tensor
@@ -67,8 +70,14 @@ def grid_pull(inp, grid, bound: List[int], interpolation: List[int],
 
 
 # @torch.jit.script
-def grid_push(inp, grid, shape: Optional[List[int]], bound: List[int],
-              interpolation: List[int], extrapolate: int):
+def grid_push(
+    inp,
+    grid,
+    shape: Optional[List[int]],
+    bound: List[int],
+    interpolation: List[int],
+    extrapolate: int,
+):
     """
     inp: (B, C, *spatial_in) tensor
     grid: (B, *spatial_in, D) tensor
@@ -103,8 +112,13 @@ def grid_push(inp, grid, shape: Optional[List[int]], bound: List[int],
 
 
 # @torch.jit.script
-def grid_count(grid, shape: Optional[List[int]], bound: List[int],
-              interpolation: List[int], extrapolate: int):
+def grid_count(
+    grid,
+    shape: Optional[List[int]],
+    bound: List[int],
+    interpolation: List[int],
+    extrapolate: int,
+):
     """
     grid: (B, *spatial_in, D) tensor
     shape: List{D}[int] tensor, optional, default=spatial_in
@@ -117,7 +131,7 @@ def grid_count(grid, shape: Optional[List[int]], bound: List[int],
     bound = pad_list_int(bound, dim)
     interpolation = pad_list_int(interpolation, dim)
     bound_fn = make_bound(bound)
-    gshape = list(grid.shape[-dim-1:-1])
+    gshape = list(grid.shape[-dim - 1 : -1])
     if shape is None:
         shape = gshape
     inp = torch.ones([], dtype=grid.dtype, device=grid.device)
@@ -143,8 +157,9 @@ def grid_count(grid, shape: Optional[List[int]], bound: List[int],
 
 
 # @torch.jit.script
-def grid_grad(inp, grid, bound: List[int], interpolation: List[int],
-              extrapolate: int):
+def grid_grad(
+    inp, grid, bound: List[int], interpolation: List[int], extrapolate: int
+):
     """
     inp: (B, C, *spatial_in) tensor
     grid: (B, *spatial_out, D) tensor
@@ -173,9 +188,15 @@ def grid_grad(inp, grid, bound: List[int], interpolation: List[int],
 
 
 # @torch.jit.script
-def grid_pushgrad(inp, grid, shape: List[int], bound: List[int],
-                  interpolation: List[int], extrapolate: int):
-    """ /!\ Used only in backward pass of grid_grad
+def grid_pushgrad(
+    inp,
+    grid,
+    shape: List[int],
+    bound: List[int],
+    interpolation: List[int],
+    extrapolate: int,
+):
+    """/!\ Used only in backward pass of grid_grad
     inp: (B, C, *spatial_in, D) tensor
     grid: (B, *spatial_in, D) tensor
     shape: List{D}[int], optional
@@ -204,9 +225,10 @@ def grid_pushgrad(inp, grid, shape: List[int], bound: List[int],
 
 
 # @torch.jit.script
-def grid_hess(inp, grid, bound: List[int], interpolation: List[int],
-              extrapolate: int):
-    """ /!\ Used only in backward pass of grid_grad
+def grid_hess(
+    inp, grid, bound: List[int], interpolation: List[int], extrapolate: int
+):
+    """/!\ Used only in backward pass of grid_grad
     inp: (B, C, *spatial_in) tensor
     grid: (B, *spatial_out, D) tensor
     bound: List{D}[int] tensor
@@ -234,9 +256,17 @@ def grid_hess(inp, grid, bound: List[int], interpolation: List[int],
 
 
 # @torch.jit.script
-def grid_pull_backward(grad, inp, grid, bound: List[int],
-                       interpolation: List[int], extrapolate: int) \
-        -> Tuple[Optional[Tensor], Optional[Tensor], ]:
+def grid_pull_backward(
+    grad,
+    inp,
+    grid,
+    bound: List[int],
+    interpolation: List[int],
+    extrapolate: int,
+) -> Tuple[
+    Optional[Tensor],
+    Optional[Tensor],
+]:
     """
     grad: (B, C, *spatial_out) tensor
     inp: (B, C, *spatial_in) tensor
@@ -250,7 +280,9 @@ def grid_pull_backward(grad, inp, grid, bound: List[int],
     grad_inp: Optional[Tensor] = None
     grad_grid: Optional[Tensor] = None
     if inp.requires_grad:
-        grad_inp = grid_push(grad, grid, inp.shape[-dim:], bound, interpolation, extrapolate)
+        grad_inp = grid_push(
+            grad, grid, inp.shape[-dim:], bound, interpolation, extrapolate
+        )
     if grid.requires_grad:
         grad_grid = grid_grad(inp, grid, bound, interpolation, extrapolate)
         # grad_grid = dot(grad_grid, grad.unsqueeze(-1), dim=1)
@@ -259,9 +291,17 @@ def grid_pull_backward(grad, inp, grid, bound: List[int],
 
 
 # @torch.jit.script
-def grid_push_backward(grad, inp, grid, bound: List[int],
-                       interpolation: List[int], extrapolate: int) \
-        -> Tuple[Optional[Tensor], Optional[Tensor], ]:
+def grid_push_backward(
+    grad,
+    inp,
+    grid,
+    bound: List[int],
+    interpolation: List[int],
+    extrapolate: int,
+) -> Tuple[
+    Optional[Tensor],
+    Optional[Tensor],
+]:
     """
     grad: (B, C, *spatial_out) tensor
     inp: (B, C, *spatial_in) tensor
@@ -283,9 +323,9 @@ def grid_push_backward(grad, inp, grid, bound: List[int],
 
 
 # @torch.jit.script
-def grid_count_backward(grad, grid, bound: List[int],
-                       interpolation: List[int], extrapolate: int) \
-        -> Optional[Tensor]:
+def grid_count_backward(
+    grad, grid, bound: List[int], interpolation: List[int], extrapolate: int
+) -> Optional[Tensor]:
     """
     grad: (B, C, *spatial_out) tensor
     grid: (B, *spatial_in, D) tensor
@@ -300,9 +340,14 @@ def grid_count_backward(grad, grid, bound: List[int],
 
 
 # @torch.jit.script
-def grid_grad_backward(grad, inp, grid, bound: List[int],
-                       interpolation: List[int], extrapolate: int) \
-        -> Tuple[Optional[Tensor], Optional[Tensor]]:
+def grid_grad_backward(
+    grad,
+    inp,
+    grid,
+    bound: List[int],
+    interpolation: List[int],
+    extrapolate: int,
+) -> Tuple[Optional[Tensor], Optional[Tensor]]:
     """
     grad: (B, C, *spatial_out, D) tensor
     inp: (B, C, *spatial_in) tensor
@@ -317,7 +362,9 @@ def grid_grad_backward(grad, inp, grid, bound: List[int],
     grad_inp: Optional[Tensor] = None
     grad_grid: Optional[Tensor] = None
     if inp.requires_grad:
-        grad_inp = grid_pushgrad(grad, grid, shape, bound, interpolation, extrapolate)
+        grad_inp = grid_pushgrad(
+            grad, grid, shape, bound, interpolation, extrapolate
+        )
     if grid.requires_grad:
         grad_grid = grid_hess(inp, grid, bound, interpolation, extrapolate)
         # grad_grid = dot_multi(grad_grid, grad.unsqueeze(-1), dim=[1, -2])
