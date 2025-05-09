@@ -12,6 +12,6 @@ load_key: "im"
 target_key: "qcglobal"
 transform_target: "binarize"
 target_threshold: 1.0
-
+reweight_train: True
 num_workers: 1
 batch_size: 1

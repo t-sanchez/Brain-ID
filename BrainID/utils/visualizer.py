@@ -266,7 +266,7 @@ class QCValidationSnapshot(Callback):
 
                         # Set title for middle slice
                         if row == 0 and s_idx == mid_slice:
-                            ax.set_title(f"Quality: {pred} (GT: {target})", fontsize=8)
+                            ax.set_title(f"Quality: {pred:.2f} (GT: {target})", fontsize=8)
 
         plt.tight_layout()
         save_path = os.path.join(

@@ -5,6 +5,8 @@ from torchmetrics import MaxMetric, MeanMetric, Dice
 import monai
 from BrainID.models.joiner import get_joiner
 from BrainID.utils.misc import nested_dict_to_device
+from BrainID.utils.misc import nested_dict_copy
+import pdb
 
 
 class BrainIDModel(LightningModule):
@@ -49,13 +51,20 @@ class BrainIDModel(LightningModule):
         :param samples: An input dictionary
         :return: A dictionary of outputs
         """
-        outputs, _ = self.model(samples)
+        outputs = self.model(samples)
         for processor in self.processor:
             outputs = processor(outputs, samples)
 
         # outputs = [{"image": x["image"]} for x in outputs]
         return outputs
 
+    
+    def return_dict_copy(self, dictionary, device):
+        dictionary = nested_dict_to_device(dictionary, device)
+        dict_copy = nested_dict_copy(dictionary)
+        del dictionary
+        return dict_copy
+    
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -75,10 +84,9 @@ class BrainIDModel(LightningModule):
         subjects = {k: batch[k] for k in batch.keys() if k != self.input_key}
         samples = [{self.input_key: x} for x in batch[self.input_key]]
 
-        
         loss = self.criterion(outputs, subjects, samples)
 
-        return loss, outputs, subjects
+        return loss, self.return_dict_copy(outputs, "cpu"), self.return_dict_copy(subjects, "cpu")
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -97,9 +105,9 @@ class BrainIDModel(LightningModule):
         self.log(
             "train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True
         )
-
+        
         # return loss or backpropagation will fail
-        return {"loss":loss , "preds": nested_dict_to_device(preds, "cpu")}
+        return {"loss": loss , "preds": preds}
 
     def validation_step(
         self,
@@ -131,16 +139,15 @@ class BrainIDModel(LightningModule):
             preds_save = {
                 "pred_" + k : [p[k] for p in preds] for k in preds[0].keys()
             }
-            preds_save = nested_dict_to_device(preds_save, "cpu")
-            targets = nested_dict_to_device(targets, "cpu")
             self.visualization_data.append({
                 "inputs": [x.detach().cpu() for x in batch[self.input_key]],
                 "batch_idx": batch_idx,
                 **targets,
                 **preds_save,
             })
-            
-        return {"loss": loss, "preds": nested_dict_to_device(preds, "cpu")}
+
+
+        return {"loss": loss, "preds": preds}
 
     def on_validation_end(self):
         self.visualization_data = []

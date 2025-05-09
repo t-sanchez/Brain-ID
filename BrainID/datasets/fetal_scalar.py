@@ -121,12 +121,24 @@ class FetalScalarDataset:
     def __len__(self):
         return len(self.df)
 
+
+    def get_labels(self):
+        """Get the labels for the dataset."""
+        labels = torch.tensor(self.df[self.target_key].values)
+        # apply scale_label in a vectorized way
+
+        for i in range(len(labels)):
+            labels[i] = self.scale_label(labels[i])[1].item()
+        return labels
+
+        
     def __getitem__(self, idx):
         """Get the item at the given index."""
         row = self.df.iloc[idx]
         img_path = row[self.load_key]
         label = torch.tensor(row[self.target_key])
-
+        
+        
         # Load the image
         img = self.loader(img_path)
 

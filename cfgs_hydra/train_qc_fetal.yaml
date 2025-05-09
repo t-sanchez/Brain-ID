@@ -4,7 +4,7 @@ defaults:
   - paths: default
   - trainer: default
   - logger: wandb
-  - callbacks: qc
+  - callbacks: task_qc
 #  - default_val
 #  #- submit
   - _self_
@@ -25,6 +25,7 @@ reset_epoch: False
 resume_optim: True
 resume_lr_scheduler: True
 freeze_feat: False
+load_backbone: True
 feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
 #train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 resume_training: False

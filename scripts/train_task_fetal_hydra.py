@@ -53,14 +53,17 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         #fast_dev_run=4,
     )
 
-    if not cfg.resume_training:        
+    if cfg.load_backbone:
         model.load_feature_weights(cfg.get("feat_ckpt"))
         resume_ckpt = None
-        
-    else:
+    elif cfg.resume_training:
         model = hydra.utils.instantiate(cfg.model, _recursive_=False)
-        resume_ckpt = cfg.get("resume_ckpt_path"),
+        resume_ckpt = cfg.get("resume_ckpt")
+    else:
+        resume_ckpt = None
         
+    
+    
     trainer.fit(
     model=model,
     train_dataloaders=datamodule.train_dataloader(),

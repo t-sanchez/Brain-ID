@@ -25,8 +25,8 @@ resume_optim: True
 resume_lr_scheduler: True
 freeze_feat: False
 feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
-resume_training: False
-resume_ckpt:
+resume_training: True
+resume_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/seg_run_seg/2025-05-07/16-54-23/checkpoints/last.ckpt
 
 ## paths 
 out_dir: outs/BrainID

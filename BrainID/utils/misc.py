@@ -17,7 +17,7 @@ import numpy as np
 import nibabel as nib
 from pathlib import Path
 import SimpleITK as sitk
-
+from copy import deepcopy
 # from utils.process_cfg import load_config
 from BrainID.utils.process_cfg import build_out_dir
 from collections import defaultdict, deque
@@ -427,6 +427,25 @@ def nested_dict_to_device(dictionary, device):
     else:
         try:
             return dictionary.to(device)
+        except:
+            return dictionary
+        
+
+def nested_dict_copy(dictionary):
+
+    if isinstance(dictionary, dict):
+        output = {}
+        for key, value in dictionary.items():
+            output[key] = nested_dict_copy(value)
+        return output
+
+    if isinstance(dictionary, str):
+        return deepcopy(dictionary)
+    elif isinstance(dictionary, list):
+        return [nested_dict_copy(d) for d in dictionary]
+    else:
+        try:
+            return deepcopy(dictionary)
         except:
             return dictionary
 

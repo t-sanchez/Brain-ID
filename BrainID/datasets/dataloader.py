@@ -15,7 +15,7 @@ import pandas as pd
 import monai
 import logging
 import torch
-
+from torch.utils.data import WeightedRandomSampler
 
 class FeatureDataModule(L.LightningDataModule):
 
@@ -235,6 +235,7 @@ class QCDataModule(L.LightningDataModule):
         target_threshold: float = 1.0,
         num_workers: int = 1,
         batch_size: int = 1,
+        reweight_train: bool = False,
     ):
         super().__init__()
         self.df = df
@@ -249,6 +250,7 @@ class QCDataModule(L.LightningDataModule):
         self.transforms = transforms
         self.num_workers = num_workers
         self.batch_size = batch_size
+        self.reweight_train = reweight_train
 
         self.train_ds = FetalScalarDataset(
             df=self.df,
@@ -292,11 +294,30 @@ class QCDataModule(L.LightningDataModule):
         return batch
 
     def train_dataloader(self):
+        if self.reweight_train:
+            labels = self.train_ds.get_labels()
+            # If labels are binary: weight each class equally
+            if len(torch.unique(labels)) == 2:
+                # labels is a torch tensor
+                labels = labels.tolist()
+                n_1 = labels.count(1)
+                n_0 = labels.count(0)
+                weights = [1.0 / n_1 if label == 1 else 1.0 / n_0 for label in labels]
+            else:
+                # Do a histogram and equalize the weights
+                hist = torch.histc(torch.tensor(labels), bins=20)
+                hist = hist / hist.sum()
+                weights = [1.0 / hist[int(label)] for label in labels]
+
+            sampler = WeightedRandomSampler(weights, len(self.train_ds), replacement=True)
+        else:
+            sampler=None
         return DataLoader(
             self.train_ds,
             batch_size=self.batch_size,
             collate_fn=self.collate,
             num_workers=self.num_workers,
+            sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
             persistent_workers=True if self.num_workers > 0 else False,
         )

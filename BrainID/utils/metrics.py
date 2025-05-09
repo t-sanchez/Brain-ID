@@ -30,6 +30,7 @@ class QCMetrics(Callback):
     def _compute_metrics(self, trainer, pl_module, outputs, batch, split):
         batch = nested_dict_to_device(batch, "cpu")
         y_true = batch["label"]
+
         y_pred = outputs["preds"][0]["pred"]
 
         for name, metric in self._metrics[split].items():

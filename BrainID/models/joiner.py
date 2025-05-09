@@ -95,7 +95,7 @@ class MultiJoiner(nn.Module):
                 head_input = self.format_head_input(feat, x)
                 out.update(self.head(*head_input))
             outs.append(out)
-        return outs, x
+        return outs
 
     def train(self, mode=True):
         self.backbone.train(mode)
