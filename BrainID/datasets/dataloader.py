@@ -472,12 +472,11 @@ class SegDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_ds,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            multiprocessing_context="spawn" if self.num_workers > 0 else None,
-            #persistent_workers=True if self.num_workers > 0 else False,
-        )
+                self.train_ds,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                multiprocessing_context="spawn",
+            )
 
     def val_dataloader(self):
         return DataLoader(
