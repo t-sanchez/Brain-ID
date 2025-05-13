@@ -14,6 +14,14 @@ from monai.transforms import (
 from fetalsyngen.utils.image_reading import SimpleITKReader
 from fetalsyngen.generator.model import FetalSynthGen
 
+import os
+
+
+def print_open_fds():
+    pid = os.getpid()
+    num_fds = len(os.listdir(f"/proc/{pid}/fd"))
+    print(f"[PID {pid}] Open file descriptors: {num_fds}")
+
 
 class FetalScalarDataset:
     """Abstract class defining a dataset for loading fetal data for a scalar task."""
@@ -130,6 +138,39 @@ class FetalScalarDataset:
             labels[i] = self.scale_label(labels[i])[1].item()
         return labels
 
+    # def __getitem__(self, idx):
+    #     """Get the item at the given index."""
+    #     row = self.df.iloc[idx]
+    #     img_path = row[self.load_key]
+    #     label = torch.tensor(row[self.target_key])
+
+    #     # Load the image
+    #     img = self.loader(img_path)
+
+    #     img = img.unsqueeze(0)
+    #     img = self.scaler(img)
+    #     img = self.orientation(img)
+    #     img = self.base_transforms(img).squeeze(0)
+
+    #     img_orig = img.clone()
+    #     if self.generator is not None:
+    #         img, _, _, synth_params = self.generator.generate(
+    #             seeds=None, image=img, segmentation=img > 0
+    #         )
+
+    #     # Transform the target
+    #     label_trf = self.scale_label(label)
+
+    #     data = {
+    #         "input": img.cpu().unsqueeze(0),
+    #         "label": label_trf.cpu(),
+    #     }
+    #     if self.generator is not None:
+    #         data["image"] = img_orig.cpu().unsqueeze(0)
+    #         data["synth_params"] = synth_params
+    #     print_open_fds()
+    #     return data
+    
     def __getitem__(self, idx):
         """Get the item at the given index."""
         row = self.df.iloc[idx]
@@ -144,24 +185,30 @@ class FetalScalarDataset:
         img = self.orientation(img)
         img = self.base_transforms(img).squeeze(0)
 
-        img_orig = img.clone()
+        # If generator is used (likely on GPU)
         if self.generator is not None:
             img, _, _, synth_params = self.generator.generate(
                 seeds=None, image=img, segmentation=img > 0
             )
+            img_orig = img.clone().detach().to("cpu", non_blocking=True)
+            img = img.detach().to("cpu", non_blocking=True)
+        else:
+            img_orig = img.clone().detach()
+            img = img.detach()
 
         # Transform the target
-        label_trf = self.scale_label(label)
+        label_trf = self.scale_label(label).detach()
 
         data = {
-            "input": img.cpu().unsqueeze(0),
-            "label": label_trf.cpu(),
+            "input": img.unsqueeze(0).contiguous(),
+            "label": label_trf.contiguous(),
         }
-        if self.generator is not None:
-            data["image"] = img_orig.cpu().unsqueeze(0)
-            data["synth_params"] = synth_params
-        return data
 
+        if self.generator is not None:
+            data["image"] = img_orig.unsqueeze(0).contiguous()
+            data["synth_params"] = synth_params  # Should be small dict/float, no memory risk
+        print_open_fds()
+        return data
 
 class FetalSegmDataset:
     """Abstract class defining a dataset for loading fetal data for a segmentation task."""
@@ -187,7 +234,7 @@ class FetalSegmDataset:
         super().__init__()
 
         if isinstance(df, str):
-            scalar_df = pd.read_csv(df)
+            df = pd.read_csv(df)
         if not isinstance(df, pd.DataFrame):
             raise ValueError(
                 "df should be a path to a csv file or a pandas DataFrame."

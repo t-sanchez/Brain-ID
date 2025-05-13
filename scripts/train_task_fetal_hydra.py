@@ -12,7 +12,9 @@ os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"
 
 torch.set_float32_matmul_precision('high')
 log = RankedLogger(__name__, rank_zero_only=True)
+import faulthandler
 
+faulthandler.enable()
 
 def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Trains the model. Can additionally evaluate on a testset, using best weights obtained during
@@ -53,6 +55,11 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         #fast_dev_run=4,
     )
 
+    # Assert either load_backbone or resume_training is set
+    if cfg.load_backbone and cfg.resume_training:
+        raise ValueError(
+            "Both load_backbone and resume_training are set. Please set only one of them."
+        )
     if cfg.load_backbone:
         model.load_feature_weights(cfg.get("feat_ckpt"))
         resume_ckpt = None

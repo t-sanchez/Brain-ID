@@ -9,6 +9,8 @@ from BrainID.utils.misc import nested_dict_copy
 import pdb
 
 
+
+
 class BrainIDModel(LightningModule):
     def __init__(
         self,
@@ -79,7 +81,7 @@ class BrainIDModel(LightningModule):
         batch = nested_dict_to_device(batch, self.device)
 
         outputs = self.forward(batch[self.input_key])
-
+        
         subjects = {k: batch[k] for k in batch.keys() if k != self.input_key}
         samples = [{self.input_key: x} for x in batch[self.input_key]]
 

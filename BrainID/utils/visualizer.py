@@ -5,6 +5,14 @@ import os
 from lightning.pytorch.callbacks import Callback
 import pdb
 
+import os
+
+
+def print_open_fds():
+    pid = os.getpid()
+    num_fds = len(os.listdir(f"/proc/{pid}/fd"))
+    print(f"[PID {pid}] Open file descriptors: {num_fds}")
+
 
 def get_slices(
     volume,
@@ -119,9 +127,9 @@ class ValidationSnapshot(Callback):
             self.output_dir, f"val_epoch_{trainer.current_epoch}.png"
         )
 
-        plt.savefig(save_path, dpi=150)
+        fig.savefig(save_path, dpi=150)
 
-        plt.close()
+        plt.close(fig)
 
 
 class ValidationFeaturesSnapshot(Callback):
@@ -194,18 +202,19 @@ class ValidationFeaturesSnapshot(Callback):
         save_path = os.path.join(
             self.output_dir, f"feature_val_epoch_{trainer.current_epoch}.png"
         )
-        plt.savefig(save_path, dpi=150)
+        fig.savefig(save_path, dpi=150)
 
-        plt.close()
+        plt.close(fig)
 
 
 class QCValidationSnapshot(Callback):
-    def __init__(self, output_dir, num_slices=5):
+    def __init__(self, output_dir, num_slices=5, vis_feat=True):
         super().__init__()
 
         self.num_slices = num_slices
         assert num_slices % 2 == 1, "num_slices must be odd"
         self.output_dir = output_dir
+        self.vis_feat = vis_feat
         os.makedirs(self.output_dir, exist_ok=True)
 
     def on_validation_epoch_end(self, trainer, pl_module):
@@ -218,7 +227,7 @@ class QCValidationSnapshot(Callback):
 
         directions = ["axial", "coronal", "sagittal"]
         n_batches = len(data)
-        n_rows = 5
+        n_rows = 5 if self.vis_feat else 2
         n_cols = self.num_slices * n_batches
 
         fig, axes = plt.subplots(
@@ -238,21 +247,24 @@ class QCValidationSnapshot(Callback):
             pred = torch.softmax(pred, dim=0)[1]
             target_vol = batch["image"].squeeze()
             target = batch["label"].squeeze()[1]
-            feat_vols = batch["pred_feat"][sample_idx][-1].squeeze()
 
             slices_dict = {
                 "Input": get_slices(input_vol, directions, self.num_slices),
                 "Target": get_slices(target_vol, directions, self.num_slices),
-                "Feature1": get_slices(
-                    feat_vols[0], directions, self.num_slices
-                ),
-                "Feature2": get_slices(
-                    feat_vols[1], directions, self.num_slices
-                ),
-                "Feature3": get_slices(
-                    feat_vols[2], directions, self.num_slices
-                ),
             }
+            if self.vis_feat:
+                feat_vols = batch["pred_feat"][sample_idx][-1].squeeze()
+                slices_dict.update({
+                    "Feature1": get_slices(
+                        feat_vols[0], directions, self.num_slices
+                    ),
+                    "Feature2": get_slices(
+                        feat_vols[1], directions, self.num_slices
+                    ),
+                    "Feature3": get_slices(
+                        feat_vols[2], directions, self.num_slices
+                    )
+                })
 
             for d_idx, direction in enumerate(directions):
                 for r_idx, key in enumerate(slices_dict.keys()):
@@ -280,9 +292,9 @@ class QCValidationSnapshot(Callback):
             self.output_dir, f"qc_val_epoch_{trainer.current_epoch}.png"
         )
 
-        plt.savefig(save_path, dpi=150)
+        fig.savefig(save_path, dpi=150)
 
-        plt.close()
+        plt.close(fig)
 
 
 class SegValidationSnapshot(Callback):
@@ -358,6 +370,6 @@ class SegValidationSnapshot(Callback):
             self.output_dir, f"seg_val_epoch_{trainer.current_epoch}.png"
         )
 
-        plt.savefig(save_path, dpi=150)
+        fig.savefig(save_path, dpi=150)
 
-        plt.close()
+        plt.close(fig)

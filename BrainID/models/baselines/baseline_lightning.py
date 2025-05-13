@@ -8,6 +8,40 @@ from BrainID.utils.misc import nested_dict_to_device
 from BrainID.utils.misc import nested_dict_copy
 import pdb
 
+import os
+
+
+def print_open_fds(str=""):
+    pid = os.getpid()
+    num_fds = len(os.listdir(f"/proc/{pid}/fd"))
+    print(f"[PID {pid}] Open file descriptors: {num_fds} ({str})")
+
+
+def list_open_fds(pid=None, limit=None):
+    """
+    List and describe all open file descriptors of the given process.
+    """
+    pid = pid or os.getpid()
+    fd_dir = f"/proc/{pid}/fd"
+    try:
+        fds = os.listdir(fd_dir)
+    except FileNotFoundError:
+        print(f"[Warning] /proc/{pid}/fd not found.")
+        return []
+
+    results = []
+    for i, fd in enumerate(sorted(fds)):
+        if limit is not None and i >= limit:
+            break
+        fd_path = os.path.join(fd_dir, fd)
+        try:
+            target = os.readlink(fd_path)
+        except Exception as e:
+            target = f"[Unreadable] {e}"
+        results.append((fd, target))
+
+    return results
+
 
 class BaselineModel(LightningModule):
     def __init__(
@@ -41,6 +75,7 @@ class BaselineModel(LightningModule):
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
         self.input_key = "input"  # if self.task != "seg" else "image"
+        self.visualization_data = []
 
     def forward(self, samples: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
@@ -76,7 +111,6 @@ class BaselineModel(LightningModule):
 
         subjects = {k: batch[k] for k in batch.keys() if k != self.input_key}
         samples = [{self.input_key: x} for x in batch[self.input_key]]
-
         loss = self.criterion(outputs, subjects, samples)
 
         return (
@@ -106,7 +140,9 @@ class BaselineModel(LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
-
+        print_open_fds("TRAINING")
+        if batch_idx % 25 == 0:
+            print(list_open_fds())
         # return loss or backpropagation will fail
         return {"loss": loss, "preds": preds}
 
@@ -150,13 +186,34 @@ class BaselineModel(LightningModule):
                     **preds_save,
                 }
             )
-
+        print_open_fds("VALIDATION")
+        if batch_idx % 25 == 0:
+            print(list_open_fds())
         return {"loss": loss, "preds": preds}
 
-    def on_validation_end(self):
-        self.visualization_data = []
+    # def on_validation_end(self):
+    #     # Explicitly delete tensors in visualization_data to help free memory
+    #     for item in self.visualization_data:
+    #         for key, value in item.items():
+    #             if isinstance(value, list):
+    #                 for v in value:
+    #                     if isinstance(v, torch.Tensor):
+    #                         del v
+    #             elif isinstance(value, torch.Tensor):
+    #                 del value
+    #     del self.visualization_data
+    #     self.visualization_data = []
 
     def on_validation_epoch_start(self):
+        for item in self.visualization_data:
+            for key, value in item.items():
+                if isinstance(value, list):
+                    for v in value:
+                        if isinstance(v, torch.Tensor):
+                            del v
+                elif isinstance(value, torch.Tensor):
+                    del value
+        del self.visualization_data
         self.visualization_data = []
 
     def load_feature_weights(self, ckpt_path):

@@ -24,8 +24,9 @@ reset_epoch: False
 resume_optim: True
 resume_lr_scheduler: True
 freeze_feat: False
+load_backbone: True
 feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
-resume_training: True
+resume_training: False
 resume_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/seg_run_seg/2025-05-07/16-54-23/checkpoints/last.ckpt
 
 ## paths 

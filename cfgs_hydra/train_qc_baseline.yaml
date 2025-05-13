@@ -4,19 +4,19 @@ defaults:
   - paths: default
   - trainer: default
   - logger: wandb
-  - callbacks: task_qc
+  - callbacks: task_qc_baseline
 #  - default_val
 #  #- submit
   - _self_
   
 ## job specific set ups ##
-job_name: qc_run
-exp_name: qc
+job_name: qc_run_baseline
+exp_name: qc_baseline
+device: "cuda:0"
+device_generator: "cuda:0"
 
-device: "cpu"
-device_generator: "cpu"
-num_workers: 1
-
+data:
+  num_workers: 3
 eval_only: False 
 debug: False 
 
