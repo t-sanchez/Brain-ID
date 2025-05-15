@@ -14,19 +14,20 @@ head:
   f_maps_list: [32]
   out_channels: 
     image: 1
+    seg: 10
   is_3d: True
   out_feat_level: -1 
 processor: []
 criterion:
   _target_: BrainID.models.criterion.SetMultiCriterion
-  n_samples: ${data.n_all_samples}
   device: ${device}
   params_dict:
     uncertainty: # only for recon or sr (regression tasks); options: { gaussian, laplace }
     bias_field_log_type: l2 # l1 or l2 
   loss_dict:
-    image:  1.
-    image_grad: 1.
+    image:  1.0
+    image_grad: 1.0
+    seg_dice_ce:  1.0
 
 optimizer:
   _target_: torch.optim.AdamW

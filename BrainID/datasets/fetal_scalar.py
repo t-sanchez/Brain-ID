@@ -17,10 +17,10 @@ from fetalsyngen.generator.model import FetalSynthGen
 import os
 
 
-def print_open_fds():
+def print_open_fds(input):
     pid = os.getpid()
     num_fds = len(os.listdir(f"/proc/{pid}/fd"))
-    print(f"[PID {pid}] Open file descriptors: {num_fds}")
+    print(f"[PID {pid}] Open file descriptors: {num_fds} ({input})")
 
 
 class FetalScalarDataset:
@@ -207,7 +207,8 @@ class FetalScalarDataset:
         if self.generator is not None:
             data["image"] = img_orig.unsqueeze(0).contiguous()
             data["synth_params"] = synth_params  # Should be small dict/float, no memory risk
-        print_open_fds()
+        if idx % 25 == 0:
+            print_open_fds("Dataloader")
         return data
 
 class FetalSegmDataset:
@@ -327,4 +328,7 @@ class FetalSegmDataset:
         if self.generator is not None:
             data["input_orig"] = img_orig.cpu().unsqueeze(0)
             data["synth_params"] = synth_params
+
+        if idx % 25 == 0:
+            print_open_fds("Dataloader")
         return data

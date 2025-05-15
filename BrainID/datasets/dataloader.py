@@ -332,7 +332,6 @@ class QCDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
-            #persistent_workers=True if self.num_workers > 0 else False,
         )
 
     def val_dataloader(self):
@@ -475,7 +474,7 @@ class SegDataModule(L.LightningDataModule):
                 self.train_ds,
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
-                multiprocessing_context="spawn",
+                multiprocessing_context="spawn" if self.num_workers > 0 else None,
             )
 
     def val_dataloader(self):

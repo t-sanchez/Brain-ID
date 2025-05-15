@@ -70,8 +70,8 @@ class SetScalarCriterion(nn.Module):
 
     def forward(self, outputs_list, targets, *kwargs):
         losses_dict = self.get_losses(outputs_list, targets, *kwargs)
-        loss = self.aggregate_losses(losses_dict)
-        return loss
+        losses_dict["loss"] = self.aggregate_losses(losses_dict)
+        return losses_dict
 
 
 class SetCriterion(nn.Module):
@@ -285,8 +285,8 @@ class SetCriterion(nn.Module):
         """
 
         losses_dict = self.get_losses(outputs, targets, *kwargs)
-        loss = self.aggregate_losses(losses_dict)
-        return loss
+        losses_dict["loss"] = self.aggregate_losses(losses_dict)
+        return losses_dict
 
 
 class SetMultiCriterion(SetCriterion):
@@ -343,4 +343,5 @@ class SetMultiCriterion(SetCriterion):
         """
         losses_dict = self.get_losses(outputs_list, targets, samples_list)
         loss = self.aggregate_losses(losses_dict)
-        return loss
+        losses_dict["loss"] = loss
+        return losses_dict

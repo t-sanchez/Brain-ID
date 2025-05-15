@@ -111,10 +111,10 @@ class BaselineModel(LightningModule):
 
         subjects = {k: batch[k] for k in batch.keys() if k != self.input_key}
         samples = [{self.input_key: x} for x in batch[self.input_key]]
-        loss = self.criterion(outputs, subjects, samples)
+        losses = self.criterion(outputs, subjects, samples)
 
         return (
-            loss,
+            losses,
             self.return_dict_copy(outputs, "cpu"),
             self.return_dict_copy(subjects, "cpu"),
         )
@@ -129,20 +129,20 @@ class BaselineModel(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        loss, preds, targets = self.model_step(batch)
+        losses, preds, targets = self.model_step(batch)
 
+        loss = losses["loss"]
         # update and log metrics
-        self.train_loss(loss)
+        self.train_loss()
         self.log(
-            "train/loss",
-            self.train_loss,
+            {f"train/{k}": v for k, v in losses.items()},
             on_step=True,
             on_epoch=True,
             prog_bar=True,
         )
-        print_open_fds("TRAINING")
+        
         if batch_idx % 25 == 0:
-            print(list_open_fds())
+            print_open_fds("TRAINING")
         # return loss or backpropagation will fail
         return {"loss": loss, "preds": preds}
 
@@ -159,33 +159,33 @@ class BaselineModel(LightningModule):
         :param batch_idx: The index of the current batch.
         """
 
-        loss, preds, targets = self.model_step(batch)
+        losses, preds, targets = self.model_step(batch)
 
+        loss = losses["loss"]
         # update and log metrics
         self.val_loss(loss)
         self.log(
-            "val/loss",
-            self.val_loss,
+            {f"val/{k}": v for k, v in losses.items()},
             on_step=True,
             on_epoch=True,
             prog_bar=True,
             add_dataloader_idx=False,
         )
 
-        if batch_idx < self.n_batches_vis:
-            preds_save = {
-                "pred_" + k: [p[k] for p in preds] for k in preds[0].keys()
-            }
-            self.visualization_data.append(
-                {
-                    "inputs": [
-                        x.detach().cpu() for x in batch[self.input_key]
-                    ],
-                    "batch_idx": batch_idx,
-                    **targets,
-                    **preds_save,
-                }
-            )
+        # if batch_idx < self.n_batches_vis:
+        #     preds_save = {
+        #         "pred_" + k: [p[k] for p in preds] for k in preds[0].keys()
+        #     }
+        #     self.visualization_data.append(
+        #         {
+        #             "inputs": [
+        #                 x.detach().cpu() for x in batch[self.input_key]
+        #             ],
+        #             "batch_idx": batch_idx,
+        #             **targets,
+        #             **preds_save,
+        #         }
+        #     )
         print_open_fds("VALIDATION")
         if batch_idx % 25 == 0:
             print(list_open_fds())

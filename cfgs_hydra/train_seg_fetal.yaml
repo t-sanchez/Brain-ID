@@ -14,7 +14,8 @@ exp_name: seg
 
 device: "cuda:0"
 device_generator:
-num_workers: 1
+data:
+  num_workers: 0
 
 eval_only: False 
 debug: False 

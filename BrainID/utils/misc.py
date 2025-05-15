@@ -20,10 +20,7 @@ import SimpleITK as sitk
 from copy import deepcopy
 
 # from utils.process_cfg import load_config
-from BrainID.utils.process_cfg import build_out_dir
 from collections import defaultdict, deque
-
-
 import torch
 import torch.nn as nn
 import torch.distributed as dist

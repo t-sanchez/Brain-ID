@@ -9,8 +9,6 @@ from BrainID.utils.misc import nested_dict_copy
 import pdb
 
 
-
-
 class BrainIDModel(LightningModule):
     def __init__(
         self,
@@ -85,10 +83,10 @@ class BrainIDModel(LightningModule):
         subjects = {k: batch[k] for k in batch.keys() if k != self.input_key}
         samples = [{self.input_key: x} for x in batch[self.input_key]]
 
-        loss = self.criterion(outputs, subjects, samples)
-
+        losses = self.criterion(outputs, subjects, samples)
+        
         return (
-            loss,
+            losses,
             self.return_dict_copy(outputs, "cpu"),
             self.return_dict_copy(subjects, "cpu"),
         )
@@ -103,13 +101,12 @@ class BrainIDModel(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        loss, preds, targets = self.model_step(batch)
-
+        losses, preds, targets = self.model_step(batch)
+        loss = losses["loss"]
         # update and log metrics
         self.train_loss(loss)
-        self.log(
-            "train/loss",
-            self.train_loss,
+        self.log_dict(
+            {f"train/{k}": v for k, v in losses.items()},
             on_step=True,
             on_epoch=True,
             prog_bar=True,
@@ -131,13 +128,12 @@ class BrainIDModel(LightningModule):
         :param batch_idx: The index of the current batch.
         """
 
-        loss, preds, targets = self.model_step(batch)
+        losses, preds, targets = self.model_step(batch)
 
         # update and log metrics
-        self.val_loss(loss)
-        self.log(
-            "val/loss",
-            self.val_loss,
+        self.val_loss(losses["loss"])
+        self.log_dict(
+            {f"val/{k}": v for k, v in losses.items()},
             on_step=True,
             on_epoch=True,
             prog_bar=True,
@@ -159,9 +155,18 @@ class BrainIDModel(LightningModule):
                 }
             )
 
-        return {"loss": loss, "preds": preds}
+        return {"loss": losses["loss"], "preds": preds}
 
     def on_validation_end(self):
+        for item in self.visualization_data:
+            for key, value in item.items():
+                if isinstance(value, list):
+                    for v in value:
+                        if isinstance(v, torch.Tensor):
+                            del v
+                elif isinstance(value, torch.Tensor):
+                    del value
+        del self.visualization_data
         self.visualization_data = []
 
     def on_validation_epoch_start(self):

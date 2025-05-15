@@ -53,7 +53,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         cfg.trainer,
         callbacks=callbacks,
         logger=logger,
-        fast_dev_run=4,
+        #fast_dev_run=4,
     )
 
 
@@ -61,6 +61,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         model=model,
         train_dataloaders=datamodule.train_dataloader(),
         val_dataloaders=datamodule.val_dataloader(),
+        
         #ckpt_path=cfg.get("ckpt_path"),
     )
 

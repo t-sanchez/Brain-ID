@@ -202,7 +202,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
             "input": samples,
             "name": name,
             "image": im_out.unsqueeze(0) if image is not None else None,
-            "seg": segm_out.unsqueeze(0).long(),
+            "label": segm_out.unsqueeze(0).long(),
             "aff": affine.cpu(),
             "shp": torch.tensor(segm_out.shape).cpu(),
         }
@@ -280,7 +280,7 @@ class RandomBlockPatchFetalDataset(Dataset):
         subjects_patch["image"] = batch["image"][
             :, slice_[0], slice_[1], slice_[2]
         ]
-        subjects_patch["seg"] = batch["seg"][
+        subjects_patch["label"] = batch["label"][
             :, slice_[0], slice_[1], slice_[2]
         ]
         subjects_patch["shp"] = torch.tensor(subjects_patch["image"].shape)

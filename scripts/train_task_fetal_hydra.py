@@ -53,6 +53,8 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         callbacks=callbacks,
         logger=logger,
         #fast_dev_run=4,
+        #limit_train_batches=0.05,
+        #limit_val_batches=0.1,
     )
 
     # Assert either load_backbone or resume_training is set
@@ -68,9 +70,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         resume_ckpt = cfg.get("resume_ckpt")
     else:
         resume_ckpt = None
-        
-    
-    
+
     trainer.fit(
     model=model,
     train_dataloaders=datamodule.train_dataloader(),

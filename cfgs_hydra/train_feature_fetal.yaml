@@ -5,12 +5,11 @@ defaults:
   - trainer: default
   - logger: wandb
   - callbacks: default
-#  - default_val
-#  #- submit
+  - hydra: default
   - _self_
   
 ## job specific set ups ##
-job_name: anat-uncertainty
+job_name: feature_model
 exp_name: feat-anat
 #init_method: "tcp://localhost:9992"
 
@@ -28,7 +27,8 @@ freeze_feat: False
 resume: False
 reset_epoch: False 
 resume_optim: True
-ckpt_path: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
+ckpt_path: 
+
 #train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 
 #lr_drops: [70,85]

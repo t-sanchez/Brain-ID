@@ -16,7 +16,3 @@ output_dir: ${hydra:runtime.output_dir}
 
 # path to working directory
 work_dir: ${hydra:runtime.cwd}
-
-hydra:
-  run:
-    dir: ./outputs/${job_name}_${exp_name}/${now:%Y-%m-%d}/${now:%H-%M-%S}

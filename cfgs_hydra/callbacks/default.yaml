@@ -17,6 +17,11 @@ model_checkpoint:
   save_last: True
   auto_insert_metric_name: False
 
+seg_visualizer:
+  _target_: BrainID.utils.visualizer.SegValidationSnapshot
+  output_dir: ${paths.output_dir}/snapshots
+  num_slices: 7
+
 early_stopping:
   monitor: "val/loss"
   patience: 200

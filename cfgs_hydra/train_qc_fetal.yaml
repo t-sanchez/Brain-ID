@@ -5,8 +5,6 @@ defaults:
   - trainer: default
   - logger: wandb
   - callbacks: task_qc
-#  - default_val
-#  #- submit
   - _self_
   
 ## job specific set ups ##
@@ -15,7 +13,6 @@ exp_name: qc
 
 device: "cuda:0"
 device_generator:
-num_workers: 2
 
 
 eval_only: False 
@@ -29,7 +26,7 @@ freeze_feat: False
 load_backbone: False
 feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
 #train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
-resume_training: True
+resume_training: False
 resume_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-09/09-58-15/checkpoints/last.ckpt
 ## paths 
 out_dir: outs/BrainID
