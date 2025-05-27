@@ -5,8 +5,17 @@ from BrainID.utils.misc import nested_dict_to_device
 from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
 
+
 class QCMetrics(Callback):
-    def __init__(self, on_train=True, on_val=True, on_test=True, run_fetmrqc=False, fetmrqc_df=None, fetmrqc_target=None):
+    def __init__(
+        self,
+        on_train=True,
+        on_val=True,
+        on_test=True,
+        run_fetmrqc=False,
+        fetmrqc_df=None,
+        fetmrqc_target=None,
+    ):
         super().__init__()
         self.on_train = on_train
         self.on_val = on_val
@@ -15,7 +24,9 @@ class QCMetrics(Callback):
         self.fetmrqc_df = fetmrqc_df
         self.target = fetmrqc_target
         if self.run_fetmrqc:
-            assert self.fetmrqc_df is not None, "If run_fetmrqc is True, fetmrqc_df must be provided."
+            assert (
+                self.fetmrqc_df is not None
+            ), "If run_fetmrqc is True, fetmrqc_df must be provided."
             self.fetmrqc_df = pd.read_csv(self.fetmrqc_df)
             self._train_and_pred_fetmrqc()
 
@@ -43,8 +54,6 @@ class QCMetrics(Callback):
         self.fetmrqc_metrics = self._get_metrics_dict()
         for name, metric in self.fetmrqc_metrics.items():
             metric.update(val_pred, val_y)
-        
-
 
     def _get_metrics_dict(self):
         return {
@@ -98,7 +107,7 @@ class QCMetrics(Callback):
 
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.run_fetmrqc:
-            
+
             pl_module.log_dict(
                 {
                     f"fetmrqc/{name}": metric.compute()
@@ -108,6 +117,7 @@ class QCMetrics(Callback):
                 on_epoch=True,
                 batch_size=len(self.fetmrqc_df),
             )
+
 
 class SegMetrics(Callback):
     def __init__(self, on_train=True, on_val=True, on_test=True):

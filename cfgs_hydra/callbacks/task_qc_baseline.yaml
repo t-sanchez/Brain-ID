@@ -18,12 +18,19 @@ visualizer:
   num_slices: 7
   vis_feat: False
 
-model_checkpoint:
+model_checkpoint_val:
   dirpath: ${paths.output_dir}/checkpoints
   filename: "epoch_{epoch:03d}_val_dsc_{val/loss:.4f}_step_{step}"
   monitor: "val/loss"
   mode: "min"
   save_last: True
+  auto_insert_metric_name: False
+
+model_checkpoint_train:
+  dirpath: ${paths.output_dir}/checkpoints
+  filename: "last_train"
+  save_top_k: 1
+  every_n_epochs: 1
   auto_insert_metric_name: False
 
 early_stopping:

@@ -10,7 +10,7 @@ import os
 from BrainID.utils import RankedLogger, instantiate_callbacks, instantiate_loggers
 os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"
 
-torch.set_float32_matmul_precision('high')
+torch.set_float32_matmul_precision('medium')
 log = RankedLogger(__name__, rank_zero_only=True)
 
 
@@ -53,17 +53,22 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         cfg.trainer,
         callbacks=callbacks,
         logger=logger,
-        #fast_dev_run=4,
+        precision='16-mixed',
     )
 
-
-    trainer.fit(
-        model=model,
-        train_dataloaders=datamodule.train_dataloader(),
-        val_dataloaders=datamodule.val_dataloader(),
-        
-        #ckpt_path=cfg.get("ckpt_path"),
-    )
+    if cfg.resume:
+        trainer.fit(
+            model=model,
+            train_dataloaders=datamodule.train_dataloader(),
+            val_dataloaders=datamodule.val_dataloader(),    
+            ckpt_path=cfg.get("ckpt_path"),
+        )
+    else:
+        trainer.fit(
+            model=model,
+            train_dataloaders=datamodule.train_dataloader(),
+            val_dataloaders=datamodule.val_dataloader(),
+        )
 
     # trainer: Trainer = hydra.utils.instantiate(
     #    cfg.trainer

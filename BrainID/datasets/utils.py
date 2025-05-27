@@ -4,5 +4,3 @@ from BrainID.datasets.fetal_id_synth import (
     BlockRandomSampler,
 )
 from torch.utils.data import DataLoader
-
-

@@ -170,7 +170,7 @@ class FetalScalarDataset:
     #         data["synth_params"] = synth_params
     #     print_open_fds()
     #     return data
-    
+
     def __getitem__(self, idx):
         """Get the item at the given index."""
         row = self.df.iloc[idx]
@@ -206,10 +206,13 @@ class FetalScalarDataset:
 
         if self.generator is not None:
             data["image"] = img_orig.unsqueeze(0).contiguous()
-            data["synth_params"] = synth_params  # Should be small dict/float, no memory risk
+            data["synth_params"] = (
+                synth_params  # Should be small dict/float, no memory risk
+            )
         if idx % 25 == 0:
             print_open_fds("Dataloader")
         return data
+
 
 class FetalSegmDataset:
     """Abstract class defining a dataset for loading fetal data for a segmentation task."""

@@ -1,5 +1,4 @@
 defaults:
-  - model_checkpoint
   - early_stopping
   - model_summary
   - rich_progress_bar
@@ -9,12 +8,22 @@ defaults:
   - feature_visualizer
   - _self_
 
-model_checkpoint:
+model_checkpoint_val:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
   dirpath: ${paths.output_dir}/checkpoints
   filename: "epoch_{epoch:03d}_val_dsc_{val/loss:.4f}_step_{step}"
   monitor: "val/loss"
   mode: "min"
   save_last: True
+  auto_insert_metric_name: False
+
+model_checkpoint_train:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: ${paths.output_dir}/checkpoints
+  filename: "last_train"
+  every_n_epochs: 1
+  save_last: False
+  save_on_train_epoch_end: True
   auto_insert_metric_name: False
 
 seg_visualizer:

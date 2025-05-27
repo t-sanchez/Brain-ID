@@ -8,6 +8,73 @@ from BrainID.utils.misc import nested_dict_to_device
 from BrainID.utils.misc import nested_dict_copy
 import pdb
 
+import subprocess
+import csv
+from datetime import datetime
+import os
+
+
+def nested_dict_to_device_and_detach(d, device):
+    if isinstance(d, dict):
+        return {k: nested_dict_to_device(v, device) for k, v in d.items()}
+    elif isinstance(d, list):
+        return [nested_dict_to_device(v, device) for v in d]
+    elif isinstance(d, torch.Tensor):
+        return d.detach().to(device)  # <--- Important line
+    else:
+        return d
+
+
+def get_gpu_processes():
+    command = [
+        "nvidia-smi",
+        "--query-compute-apps=pid,used_memory",
+        "--format=csv,noheader,nounits",
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print("Failed to run nvidia-smi")
+        return []
+
+    processes = []
+    for line in result.stdout.strip().splitlines():
+        if line:
+            pid, memory = line.split(", ")
+            processes.append((int(pid), int(memory)))
+    return processes
+
+
+def log_gpu_memory_usage(
+    idx, csv_file="gpu_memory_log.csv", phase="unspecified"
+):
+    processes = get_gpu_processes()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Check if file exists to decide whether to write header
+    file_exists = os.path.isfile(csv_file)
+
+    with open(csv_file, mode="a", newline="") as file:
+        writer = csv.writer(file)
+
+        # Write header if the file doesn't exist
+        if not file_exists:
+            writer.writerow(["timestamp", "phase", "pid", "memory_used_mib"])
+            print(torch.cuda.memory_summary(device=0, abbreviated=False))
+
+        # Write memory usage log
+        for pid, memory in processes:
+            writer.writerow([timestamp, phase, pid, memory])
+
+    if idx % 50 == 0:
+        with open("gpu_memory_summary.txt", "a") as f:
+            f.write(f"GPU Memory Summary at index {idx} for phase {phase}:\n")
+            f.write(torch.cuda.memory_summary(device=0, abbreviated=False))
+            f.write("\n")
+
+
+# Example usage
+
 
 class BrainIDModel(LightningModule):
     def __init__(
@@ -59,10 +126,10 @@ class BrainIDModel(LightningModule):
         return outputs
 
     def return_dict_copy(self, dictionary, device):
-        dictionary = nested_dict_to_device(dictionary, device)
-        dict_copy = nested_dict_copy(dictionary)
-        del dictionary
-        return dict_copy
+        dictionary = nested_dict_to_device_and_detach(dictionary, device)
+        # dict_copy = nested_dict_copy(dictionary)
+        # del dictionary
+        return dictionary
 
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
@@ -79,12 +146,12 @@ class BrainIDModel(LightningModule):
         batch = nested_dict_to_device(batch, self.device)
 
         outputs = self.forward(batch[self.input_key])
-        
+
         subjects = {k: batch[k] for k in batch.keys() if k != self.input_key}
         samples = [{self.input_key: x} for x in batch[self.input_key]]
 
         losses = self.criterion(outputs, subjects, samples)
-        
+
         return (
             losses,
             self.return_dict_copy(outputs, "cpu"),
@@ -112,7 +179,9 @@ class BrainIDModel(LightningModule):
             prog_bar=True,
         )
 
-        # return loss or backpropagation will fail
+        if batch_idx % 200 == 0:
+            torch.cuda.empty_cache()
+        log_gpu_memory_usage(batch_idx, phase=f"train_{batch_idx}")
         return {"loss": loss, "preds": preds}
 
     def validation_step(
@@ -139,22 +208,22 @@ class BrainIDModel(LightningModule):
             prog_bar=True,
             add_dataloader_idx=False,
         )
-
+        log_gpu_memory_usage(batch_idx, phase=f"validation_{batch_idx}")
         if batch_idx < self.n_batches_vis:
             preds_save = {
                 "pred_" + k: [p[k] for p in preds] for k in preds[0].keys()
             }
-            self.visualization_data.append(
-                {
-                    "inputs": [
-                        x.detach().cpu() for x in batch[self.input_key]
-                    ],
-                    "batch_idx": batch_idx,
-                    **targets,
-                    **preds_save,
-                }
-            )
+            vis_data = {
+                "inputs": [x.detach().cpu() for x in batch[self.input_key]],
+                "batch_idx": batch_idx,
+                **targets,
+                **preds_save,
+            }
+            vis_data = nested_dict_to_device_and_detach(vis_data, "cpu")
+            self.visualization_data.append(vis_data)
 
+        if batch_idx % 200 == 0:
+            torch.cuda.empty_cache()
         return {"loss": losses["loss"], "preds": preds}
 
     def on_validation_end(self):

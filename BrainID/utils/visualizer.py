@@ -170,10 +170,10 @@ class ValidationFeaturesSnapshot(Callback):
             "Target": get_slices(target_vol, directions, self.num_slices),
         }
 
-        n_rows = 3 + 32
+        n_rows = 3 + 48
         if "pred_image" not in batch:
             del slices_dict["Prediction"]
-            n_rows = 2 + 32
+            n_rows = 2 + 48
         for i in range(len(feat_vols)):
             slices_dict[f"Feature{i+1}"] = get_slices(
                 feat_vols[i], directions, self.num_slices
@@ -254,17 +254,19 @@ class QCValidationSnapshot(Callback):
             }
             if self.vis_feat:
                 feat_vols = batch["pred_feat"][sample_idx][-1].squeeze()
-                slices_dict.update({
-                    "Feature1": get_slices(
-                        feat_vols[0], directions, self.num_slices
-                    ),
-                    "Feature2": get_slices(
-                        feat_vols[1], directions, self.num_slices
-                    ),
-                    "Feature3": get_slices(
-                        feat_vols[2], directions, self.num_slices
-                    )
-                })
+                slices_dict.update(
+                    {
+                        "Feature1": get_slices(
+                            feat_vols[0], directions, self.num_slices
+                        ),
+                        "Feature2": get_slices(
+                            feat_vols[1], directions, self.num_slices
+                        ),
+                        "Feature3": get_slices(
+                            feat_vols[2], directions, self.num_slices
+                        ),
+                    }
+                )
 
             for d_idx, direction in enumerate(directions):
                 for r_idx, key in enumerate(slices_dict.keys()):

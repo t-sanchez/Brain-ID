@@ -140,7 +140,7 @@ class BaselineModel(LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
-        
+
         if batch_idx % 25 == 0:
             print_open_fds("TRAINING")
         # return loss or backpropagation will fail

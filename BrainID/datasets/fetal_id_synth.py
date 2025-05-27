@@ -15,6 +15,66 @@ from fetalsyngen.data.datasets import FetalSynthDataset
 from fetalsyngen.generator.model import FetalSynthGen
 import time
 from collections import defaultdict
+from monai.transforms import CropForegroundd
+import torch
+from monai.transforms import MapTransform
+from monai.config import KeysCollection
+from typing import Union, Sequence
+import numpy as np
+
+
+class CropWithAsymmetricMargind(MapTransform):
+    def __init__(
+        self,
+        keys: KeysCollection,
+        source_key: str,
+        margins: Sequence[
+            Sequence[int]
+        ],  # e.g., [[top, bottom], [left, right], [front, back]]
+        allow_missing_keys: bool = False,
+    ):
+        super().__init__(keys)
+        self.source_key = source_key
+        self.margins = margins
+        self.allow_missing_keys = allow_missing_keys
+
+    def __call__(self, data, margins=None):
+        d = dict(data)
+        src = d[self.source_key]
+        if margins is None:
+            margins = self.margins
+
+        # Check if the tensor has a channel dimension
+        has_channel = src.ndim == 4  # [C, H, W, D]
+        spatial_src = (
+            src[0] if has_channel else src
+        )  # Use first channel to compute bbox
+
+        nonzero = (spatial_src > 0).nonzero()
+
+        if nonzero.numel() == 0:
+            raise ValueError("Source segmentation is empty.")
+
+        min_coords = nonzero.min(0).values
+        max_coords = nonzero.max(0).values + 1
+
+        slices = []
+        for i in range(len(min_coords)):
+            start = max(0, min_coords[i].item() - margins[i][0])
+            end = max_coords[i].item() + margins[i][1]
+            slices.append(slice(start, end))
+
+        # Insert channel slice if needed
+        if has_channel:
+            slices = [slice(None)] + slices
+
+        for key in self.keys:
+            if self.allow_missing_keys:
+                if key not in d:
+                    continue
+            d[key] = d[key][tuple(slices)]
+
+        return d
 
 
 class BrainIDFetalSynthDataset(FetalSynthDataset):
@@ -67,6 +127,66 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
         self.n_mild_samples = n_mild_samples
         self.n_severe_samples = n_severe_samples
         self.mask_image = mask_image
+        self.crop_input_fn = CropWithAsymmetricMargind(
+            keys=["image", "segmentation", "seeds"],
+            source_key="segmentation",
+            margins=[(0, 0), (0, 0), (0, 0)],
+            allow_missing_keys=True,
+        )
+        self.max_margin = 25
+
+    def crop_input(self, image, segmentation, seeds=None) -> dict:
+        """
+        Crop the input image, segmentation, and seeds to the foreground defined by the segmentation mask.
+        This is useful to remove unnecessary background and focus on the region of interest.
+
+        Args:
+            image: Input image tensor.
+            segmentation: Segmentation tensor.
+            seeds: Optional seeds tensor.
+
+        Returns:
+            A dictionary with cropped image, segmentation, and seeds (if provided).
+        """
+        if len(image.shape) == 3:
+            image = image.unsqueeze(0)
+        if len(segmentation.shape) == 3:
+            segmentation = segmentation.unsqueeze(0)
+        if seeds is not None and len(seeds.shape) == 3:
+            seeds = seeds.unsqueeze(0)
+        in_dict = {"image": image, "segmentation": segmentation}
+        if seeds is not None:
+            in_dict["seeds"] = seeds
+
+        poisson_lam = np.random.randint(1, 15)
+        x_left = np.random.poisson(lam=poisson_lam)
+        x_left = min(x_left, self.max_margin - 1)
+        x_right = np.random.poisson(lam=poisson_lam)
+        x_right = min(x_right, self.max_margin - x_left - 1)
+        y_top = np.random.poisson(lam=poisson_lam)
+        y_top = min(y_top, self.max_margin - 1)
+        y_bottom = np.random.poisson(lam=poisson_lam)
+        y_bottom = min(y_bottom, self.max_margin - y_top - 1)
+        z_front = np.random.poisson(lam=poisson_lam)
+        z_front = min(z_front, self.max_margin - 1)
+        z_back = np.random.poisson(lam=poisson_lam)
+        z_back = min(z_back, self.max_margin - z_front - 1)
+
+        margins = [[x_left, x_right], [y_top, y_bottom], [z_front, z_back]]
+
+        out_dict = self.crop_input_fn(in_dict, margins)
+        vol = np.prod(out_dict["segmentation"].shape)
+        shape_red = (1 - vol / 256**3) * 100
+        # print(f"SHAPE REDUCTION: {shape_red:.0f}%")
+        for k, v in out_dict.items():
+            out_dict[k] = v.squeeze()
+        if "seeds" in out_dict:
+            return (
+                out_dict["image"],
+                out_dict["segmentation"],
+                out_dict["seeds"],
+            )
+        return out_dict["image"], out_dict["segmentation"]
 
     def sample(self, idx, genparams: dict = {}) -> tuple[dict, dict]:
         """
@@ -128,6 +248,17 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
                 seeds=seeds, genparams=genparams.get("selected_seeds", {})
             )
         )
+
+        # print("Processing data from", self.img_paths[idx])
+        # print(f"Input data shape: {image.shape}, {segm.shape}, {seeds.shape}")
+        image, segm, seeds = self.crop_input(
+            image=image,
+            segmentation=segm,
+            seeds=seeds,
+        )
+        # print(f"Output data shape: {image.shape}, {segm.shape}, {seeds.shape}")
+        # Save image and segm
+
         xx2, yy2, zz2, flip, deform_params = (
             self.generator_mild.spatial_deform.generate_deformation_and_flip(
                 image_shape=seeds.shape,
@@ -237,16 +368,28 @@ class RandomBlockPatchFetalDataset(Dataset):
         Get a random slice of length self.patch_size
         from the shape, within the bounds of the shape.
         """
-        assert all(
-            self.boundary * 2 + self.patch_size < s for s in shape
-        ), f"Patch size + 2*boundary ({self.boundary*2+self.patch_size}) is larger than image size ({shape})"
-        max_start = [s - self.patch_size - self.boundary for s in shape]
+        boundary_list = [
+            (
+                self.boundary
+                if self.boundary * 2 + self.patch_size < s
+                else (s - self.patch_size - 1) // 2
+            )
+            for s in shape
+        ]
+
+        # assert all(
+        #    self.boundary * 2 + self.patch_size < s for s in shape
+        # ), f"Patch size + 2*boundary ({self.boundary*2+self.patch_size}) is larger than image size ({shape})"
+        max_start = [
+            s - self.patch_size - b for s, b in zip(shape, boundary_list)
+        ]
 
         # Get a random start index for each dimension
         # Return the slice
         slice_idx = []
-        for max_ in max_start:
-            idx = np.random.randint(self.boundary, max_)
+
+        for max_, b in zip(max_start, boundary_list):
+            idx = np.random.randint(b, max_)
             slice_idx.append((idx, idx + self.patch_size))
         return slice_idx
 
