@@ -226,6 +226,9 @@ class BrainIDModel(LightningModule):
             torch.cuda.empty_cache()
         return {"loss": losses["loss"], "preds": preds}
 
+    def on_train_epoch_end(self):
+        torch.cuda.empty_cache()
+
     def on_validation_end(self):
         for item in self.visualization_data:
             for key, value in item.items():
@@ -237,6 +240,7 @@ class BrainIDModel(LightningModule):
                     del value
         del self.visualization_data
         self.visualization_data = []
+        torch.cuda.empty_cache()
 
     def on_validation_epoch_start(self):
         self.visualization_data = []

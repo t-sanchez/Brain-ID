@@ -160,16 +160,22 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
 
         poisson_lam = np.random.randint(1, 15)
         x_left = np.random.poisson(lam=poisson_lam)
-        x_left = min(x_left, self.max_margin - 1)
         x_right = np.random.poisson(lam=poisson_lam)
-        x_right = min(x_right, self.max_margin - x_left - 1)
         y_top = np.random.poisson(lam=poisson_lam)
-        y_top = min(y_top, self.max_margin - 1)
         y_bottom = np.random.poisson(lam=poisson_lam)
-        y_bottom = min(y_bottom, self.max_margin - y_top - 1)
         z_front = np.random.poisson(lam=poisson_lam)
-        z_front = min(z_front, self.max_margin - 1)
         z_back = np.random.poisson(lam=poisson_lam)
+
+        x_left = min(x_left, self.max_margin - 1)
+
+        x_right = min(x_right, self.max_margin - x_left - 1)
+
+        y_top = min(y_top, self.max_margin - 1)
+
+        y_bottom = min(y_bottom, self.max_margin - y_top - 1)
+
+        z_front = min(z_front, self.max_margin - 1)
+
         z_back = min(z_back, self.max_margin - z_front - 1)
 
         margins = [[x_left, x_right], [y_top, y_bottom], [z_front, z_back]]
@@ -177,7 +183,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
         out_dict = self.crop_input_fn(in_dict, margins)
         vol = np.prod(out_dict["segmentation"].shape)
         shape_red = (1 - vol / 256**3) * 100
-        # print(f"SHAPE REDUCTION: {shape_red:.0f}%")
+
         for k, v in out_dict.items():
             out_dict[k] = v.squeeze()
         if "seeds" in out_dict:
@@ -186,6 +192,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
                 out_dict["segmentation"],
                 out_dict["seeds"],
             )
+
         return out_dict["image"], out_dict["segmentation"]
 
     def sample(self, idx, genparams: dict = {}) -> tuple[dict, dict]:
@@ -337,7 +344,14 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
             "aff": affine.cpu(),
             "shp": torch.tensor(segm_out.shape).cpu(),
         }
+        self.generation_params = generation_params
+        # allocated = torch.cuda.memory_allocated() / 1024**2  # MB
+        # reserved = torch.cuda.memory_reserved() / 1024**2    # MB
 
+        # print(f"Dataloader Allocated: {allocated:.2f} MB")
+        # print(f"Dataloader Reserved: {reserved:.2f} MB")
+        # print(f"Dataloader Cached (unused): {(reserved - allocated):.2f} MB")
+        # print(f"Dataloader image shape {torch.tensor(segm_out.shape).cpu()} -- Size/1000: {torch.tensor(segm_out.shape).cpu().prod()/1e3}")
         return data_out
 
     def __getitem__(self, idx, genparams: dict = {}):

@@ -162,17 +162,17 @@ class FeatureDataModule(L.LightningDataModule):
         assert "participant_id" in split_df.columns
         assert "splits" in split_df.columns
 
-        train_subjects = split_df[
+        train_subjects = sorted(split_df[
             split_df.splits == self.train_split
-        ].participant_id.tolist()
+        ].participant_id.tolist())
 
-        val_subjects = split_df[
+        val_subjects = sorted(split_df[
             split_df.splits == self.val_split
-        ].participant_id.tolist()
+        ].participant_id.tolist())
 
-        test_subjects = split_df[
+        test_subjects = sorted(split_df[
             split_df.splits == self.test_split
-        ].participant_id.tolist()
+        ].participant_id.tolist())
 
         return train_subjects, val_subjects, test_subjects
 
@@ -202,6 +202,7 @@ class FeatureDataModule(L.LightningDataModule):
             collate_fn=self.collate,
             sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
+            pin_memory=False,
             # persistent_workers=True if self.num_workers > 0 else False,
         )
 
