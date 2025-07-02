@@ -20,7 +20,7 @@ defaults:
 
 model_checkpoint:
   dirpath: ${paths.output_dir}/checkpoints
-  filename: "epoch_{epoch:03d}_val_dsc_{val/loss:.4f}_step_{step}"
+  filename: "epoch_{epoch:03d}_val_{val/loss:.4f}_step_{step}"
   monitor: "val/loss"
   mode: "min"
   save_last: True

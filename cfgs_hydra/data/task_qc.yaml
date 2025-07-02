@@ -4,7 +4,7 @@ defaults:
   
 _target_: BrainID.datasets.dataloader.QCDataModule
 
-df: /home/tsanchez/Documents/mial/repositories/Brain-ID/data/qc_data.csv
+df: /home/tsanchez/Documents/mial/repositories/Brain-ID/data/qc_data2.csv
 train_split: "train"
 val_split: "val"
 test_split: "test"

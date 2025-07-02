@@ -193,3 +193,73 @@ class Conv5_FC3(nn.Module):
 
     def predict(self, x):
         return self.forward(x)
+
+
+class Conv3_FC2(nn.Module):
+    """
+    It is a convolutional neural network with 5 convolution and 3 fully-connected layer.
+    It reduces the 2D or 3D input image to an array of size output_size.
+    """
+
+    def __init__(
+        self, input_size, norm="batch", gpu=True, output_size=2, dropout=0.5
+    ):
+        super().__init__()
+        input_size = list(input_size)
+        conv, norm, pool = get_layers_fn(input_size, norm)
+        self.convolutions = nn.Sequential(
+            conv(input_size[0], 32, 3, padding=1),
+            norm(32),
+            nn.ReLU(),
+            pool(2, 2),
+            conv(32, 64, 3, padding=1),
+            norm(64),
+            nn.ReLU(),
+            pool(2, 2),
+            conv(64, 128, 3, padding=1),
+            norm(128),
+            nn.ReLU(),
+            # Do global max pooling
+            nn.AdaptiveMaxPool3d(1)
+        )
+
+        self.fc = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(p=dropout),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, output_size),
+        )
+
+    def forward(self, input_list):
+        outs = []
+        if not isinstance(input_list, list):
+            input_list = [input_list]
+        for x in input_list:
+            x = self.convolutions(x)
+            x = self.fc(x)
+            outs.append({"pred": x})
+        return outs, x
+
+    def predict(self, x):
+        return self.forward(x)
+
+
+class ModelWrapper(nn.Module):
+
+    def __init__(self, model):
+        super(ModelWrapper, self).__init__()
+        self.model = model
+
+    def forward(self, input_list):
+        outs = []
+        if not isinstance(input_list, list):
+            input_list = [input_list]
+
+        for x in input_list:
+            x = self.model(x)
+            outs.append({"pred": x})
+        return outs, x
+
+    def predict(self, x):
+        return self.forward(x)

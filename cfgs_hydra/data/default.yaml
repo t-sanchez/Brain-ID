@@ -17,8 +17,8 @@ val_split: "val"
 test_split: 
 transforms: 
 
-n_all_samples: 5
-n_mild_samples: 3
+n_all_samples: 4
+n_mild_samples: 2
 n_severe_samples: 2
 mask_image: True
 

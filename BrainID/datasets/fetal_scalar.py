@@ -17,11 +17,6 @@ from fetalsyngen.generator.model import FetalSynthGen
 import os
 
 
-def print_open_fds(input):
-    pid = os.getpid()
-    num_fds = len(os.listdir(f"/proc/{pid}/fd"))
-    print(f"[PID {pid}] Open file descriptors: {num_fds} ({input})")
-
 
 class FetalScalarDataset:
     """Abstract class defining a dataset for loading fetal data for a scalar task."""
@@ -184,14 +179,16 @@ class FetalScalarDataset:
         img = self.scaler(img)
         img = self.orientation(img)
         img = self.base_transforms(img).squeeze(0)
-
         # If generator is used (likely on GPU)
         if self.generator is not None:
+            # Only does spatial deformation
             img, _, _, synth_params = self.generator.generate(
                 seeds=None, image=img, segmentation=img > 0
             )
             img_orig = img.clone().detach().to("cpu", non_blocking=True)
             img = img.detach().to("cpu", non_blocking=True)
+            img_orig = self.scaler(img_orig)
+            img = self.scaler(img)
         else:
             img_orig = img.clone().detach()
             img = img.detach()
@@ -202,6 +199,7 @@ class FetalScalarDataset:
         data = {
             "input": img.unsqueeze(0).contiguous(),
             "label": label_trf.contiguous(),
+            "path": img_path,
         }
 
         if self.generator is not None:
@@ -209,8 +207,6 @@ class FetalScalarDataset:
             data["synth_params"] = (
                 synth_params  # Should be small dict/float, no memory risk
             )
-        if idx % 25 == 0:
-            print_open_fds("Dataloader")
         return data
 
 

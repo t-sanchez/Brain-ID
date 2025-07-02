@@ -203,6 +203,7 @@ class FeatureDataModule(L.LightningDataModule):
             sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
+            timeout=120,
             # persistent_workers=True if self.num_workers > 0 else False,
         )
 
@@ -213,6 +214,7 @@ class FeatureDataModule(L.LightningDataModule):
             num_workers=0,
             collate_fn=self.collate,
             pin_memory=False,
+            timeout=120,
         )
 
     def test_dataloader(self):
@@ -223,6 +225,7 @@ class FeatureDataModule(L.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=0,
             pin_memory=False,
+            timeout=120,
         )
 
 
@@ -320,7 +323,6 @@ class QCDataModule(L.LightningDataModule):
                 hist = torch.histc(torch.tensor(labels), bins=20)
                 hist = hist / hist.sum()
                 weights = [1.0 / hist[int(label)] for label in labels]
-
             sampler = WeightedRandomSampler(
                 weights, len(self.train_ds), replacement=True
             )
@@ -333,6 +335,8 @@ class QCDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
+            timeout=20 if self.num_workers > 0 else 0,
+            persistent_workers=False,
         )
 
     def val_dataloader(self):
@@ -340,8 +344,11 @@ class QCDataModule(L.LightningDataModule):
             self.val_ds,
             batch_size=self.batch_size,
             collate_fn=self.collate,
-            num_workers=0,
+            num_workers=self.num_workers,
+            multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
+            timeout=20 if self.num_workers > 0 else 0,
+            persistent_workers=False,
         )
 
     def test_dataloader(self):
@@ -351,8 +358,11 @@ class QCDataModule(L.LightningDataModule):
             self.test_ds,
             batch_size=self.batch_size,
             collate_fn=self.collate,
-            num_workers=0,
+            num_workers=self.num_workers,
+            multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
+            timeout=20 if self.num_workers > 0 else 0,
+            persistent_workers=False,
         )
 
 

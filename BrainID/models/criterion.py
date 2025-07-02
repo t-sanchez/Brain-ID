@@ -25,7 +25,7 @@ class SetScalarCriterion(nn.Module):
             "l2": self.loss_l2,
             "ce": self.loss_ce,
         }
-        self.ce = nn.CrossEntropyLoss()
+        self.ce = nn.BCEWithLogitsLoss() ##nn.CrossEntropyLoss()
         self.l1 = nn.L1Loss()
         self.l2 = nn.MSELoss()
         self.device = device

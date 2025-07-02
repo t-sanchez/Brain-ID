@@ -11,36 +11,6 @@ import pdb
 import os
 
 
-def print_open_fds(str=""):
-    pid = os.getpid()
-    num_fds = len(os.listdir(f"/proc/{pid}/fd"))
-    print(f"[PID {pid}] Open file descriptors: {num_fds} ({str})")
-
-
-def list_open_fds(pid=None, limit=None):
-    """
-    List and describe all open file descriptors of the given process.
-    """
-    pid = pid or os.getpid()
-    fd_dir = f"/proc/{pid}/fd"
-    try:
-        fds = os.listdir(fd_dir)
-    except FileNotFoundError:
-        print(f"[Warning] /proc/{pid}/fd not found.")
-        return []
-
-    results = []
-    for i, fd in enumerate(sorted(fds)):
-        if limit is not None and i >= limit:
-            break
-        fd_path = os.path.join(fd_dir, fd)
-        try:
-            target = os.readlink(fd_path)
-        except Exception as e:
-            target = f"[Unreadable] {e}"
-        results.append((fd, target))
-
-    return results
 
 
 class BaselineModel(LightningModule):
@@ -133,16 +103,14 @@ class BaselineModel(LightningModule):
 
         loss = losses["loss"]
         # update and log metrics
-        self.train_loss()
-        self.log(
+        self.train_loss(loss)
+        self.log_dict(
             {f"train/{k}": v for k, v in losses.items()},
             on_step=True,
             on_epoch=True,
             prog_bar=True,
         )
 
-        if batch_idx % 25 == 0:
-            print_open_fds("TRAINING")
         # return loss or backpropagation will fail
         return {"loss": loss, "preds": preds}
 
@@ -161,10 +129,8 @@ class BaselineModel(LightningModule):
 
         losses, preds, targets = self.model_step(batch)
 
-        loss = losses["loss"]
-        # update and log metrics
-        self.val_loss(loss)
-        self.log(
+        self.val_loss(losses["loss"])
+        self.log_dict(
             {f"val/{k}": v for k, v in losses.items()},
             on_step=True,
             on_epoch=True,
@@ -172,39 +138,28 @@ class BaselineModel(LightningModule):
             add_dataloader_idx=False,
         )
 
-        # if batch_idx < self.n_batches_vis:
-        #     preds_save = {
-        #         "pred_" + k: [p[k] for p in preds] for k in preds[0].keys()
-        #     }
-        #     self.visualization_data.append(
-        #         {
-        #             "inputs": [
-        #                 x.detach().cpu() for x in batch[self.input_key]
-        #             ],
-        #             "batch_idx": batch_idx,
-        #             **targets,
-        #             **preds_save,
-        #         }
-        #     )
-        print_open_fds("VALIDATION")
-        if batch_idx % 25 == 0:
-            print(list_open_fds())
-        return {"loss": loss, "preds": preds}
+        if batch_idx < self.n_batches_vis:
+            preds_save = {
+                "pred_" + k: [p[k] for p in preds] for k in preds[0].keys()
+            }
+            self.visualization_data.append(
+                {
+                    "inputs": [
+                        x.detach().cpu() for x in batch[self.input_key]
+                    ],
+                    "batch_idx": batch_idx,
+                    **targets,
+                    **preds_save,
+                }
+            )
 
-    # def on_validation_end(self):
-    #     # Explicitly delete tensors in visualization_data to help free memory
-    #     for item in self.visualization_data:
-    #         for key, value in item.items():
-    #             if isinstance(value, list):
-    #                 for v in value:
-    #                     if isinstance(v, torch.Tensor):
-    #                         del v
-    #             elif isinstance(value, torch.Tensor):
-    #                 del value
-    #     del self.visualization_data
-    #     self.visualization_data = []
+        return {"loss": losses["loss"], "preds": preds}
 
-    def on_validation_epoch_start(self):
+    def on_train_epoch_end(self):
+        torch.cuda.empty_cache()
+
+    def on_validation_end(self):
+        # Explicitly delete tensors in visualization_data to help free memory
         for item in self.visualization_data:
             for key, value in item.items():
                 if isinstance(value, list):
@@ -214,6 +169,10 @@ class BaselineModel(LightningModule):
                 elif isinstance(value, torch.Tensor):
                     del value
         del self.visualization_data
+        self.visualization_data = []
+        torch.cuda.empty_cache()
+
+    def on_validation_epoch_start(self):
         self.visualization_data = []
 
     def load_feature_weights(self, ckpt_path):
@@ -246,4 +205,4 @@ class BaselineModel(LightningModule):
         optimizer = self.optimizer(self.parameters())
         scheduler = self.scheduler(optimizer)
 
-        return [optimizer], [scheduler]
+        return [optimizer], [{"scheduler": scheduler, "monitor": "train/loss"}]

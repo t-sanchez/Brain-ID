@@ -16,7 +16,7 @@ device: "cuda:0"
 device_generator: "cuda:0"
 
 data:
-  num_workers: 2
+  num_workers: 1
 eval_only: False 
 debug: False 
 

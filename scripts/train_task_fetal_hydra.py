@@ -1,3 +1,5 @@
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 from typing import Any, Dict, List, Optional, Tuple
 import hydra
 import lightning as L
@@ -6,6 +8,7 @@ from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
 import os
+
 
 from BrainID.utils import RankedLogger, instantiate_callbacks, instantiate_loggers
 os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"

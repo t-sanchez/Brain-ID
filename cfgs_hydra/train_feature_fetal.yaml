@@ -25,10 +25,11 @@ eval_only: False
 debug: False 
 freeze_feat: False
 
-resume: False
+resume: True
 reset_epoch: False 
 resume_optim: True
-ckpt_path: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/feature_model_feat-anat/2025-05-22/15-07-57/checkpoints/last_train.ckpt
+ckpt_path: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/feature_model_feat-anat/2025-06-24/11-07-34/checkpoints/last_train.ckpt
+#/home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/feature_model_feat-anat/2025-05-22/15-07-57/checkpoints/last_train.ckpt
 
 #train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 
