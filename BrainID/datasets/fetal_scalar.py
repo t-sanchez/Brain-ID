@@ -17,7 +17,6 @@ from fetalsyngen.generator.model import FetalSynthGen
 import os
 
 
-
 class FetalScalarDataset:
     """Abstract class defining a dataset for loading fetal data for a scalar task."""
 
@@ -84,15 +83,15 @@ class FetalScalarDataset:
             [
                 CropForeground(
                     allow_smaller=True,
-                    margin=0,
+                    margin=5,
                 ),
-                SpatialPad(
-                    spatial_size=(256, 256, 256),
-                    mode="constant",
-                ),
-                CenterSpatialCrop(
-                    roi_size=(256, 256, 256),
-                ),
+                # SpatialPad(
+                #     spatial_size=(256, 256, 256),
+                #     mode="constant",
+                # ),
+                # CenterSpatialCrop(
+                #     roi_size=(256, 256, 256),
+                # ),
             ]
         )
 
@@ -180,11 +179,13 @@ class FetalScalarDataset:
         img = self.orientation(img)
         img = self.base_transforms(img).squeeze(0)
         # If generator is used (likely on GPU)
+
         if self.generator is not None:
             # Only does spatial deformation
             img, _, _, synth_params = self.generator.generate(
                 seeds=None, image=img, segmentation=img > 0
             )
+
             img_orig = img.clone().detach().to("cpu", non_blocking=True)
             img = img.detach().to("cpu", non_blocking=True)
             img_orig = self.scaler(img_orig)
@@ -207,6 +208,7 @@ class FetalScalarDataset:
             data["synth_params"] = (
                 synth_params  # Should be small dict/float, no memory risk
             )
+
         return data
 
 

@@ -25,7 +25,7 @@ class SetScalarCriterion(nn.Module):
             "l2": self.loss_l2,
             "ce": self.loss_ce,
         }
-        self.ce = nn.BCEWithLogitsLoss() ##nn.CrossEntropyLoss()
+        self.ce = nn.BCEWithLogitsLoss()  ##nn.CrossEntropyLoss()
         self.l1 = nn.L1Loss()
         self.l2 = nn.MSELoss()
         self.device = device
@@ -74,12 +74,37 @@ class SetScalarCriterion(nn.Module):
         return losses_dict
 
 
+class UncertaintyWeighting(nn.Module):
+    def __init__(self, num_tasks):
+        super().__init__()
+        self.log_vars = nn.ParameterList(
+            [nn.Parameter(torch.zeros(1)) for _ in range(num_tasks)]
+        )
+
+    def forward(self, losses):
+        """
+        losses: list of scalar tensors, e.g., [loss1, loss2, ..., lossN]
+        Each loss should already be reduced (e.g., mean or sum over batch).
+        """
+        total = 0
+        for loss, log_var in zip(losses, self.log_vars):
+            log_var = log_var.clamp(-10, 10)
+            precision = torch.exp(-log_var)
+            total += precision * loss + log_var
+        return total
+
+    def get_sigmas(self):
+        return [torch.exp(log_var).item() for log_var in self.log_vars]
+
+
 class SetCriterion(nn.Module):
     """
     This class computes the loss for BrainID.
     """
 
-    def __init__(self, loss_dict, params_dict, device):
+    def __init__(
+        self, loss_dict, params_dict, device, uncertainty_weigthing=False
+    ):
         """Create the criterion.
         Parameters:
             args: general exp cfg
@@ -135,6 +160,10 @@ class SetCriterion(nn.Module):
             "supervised_seg": self.loss_supervised_seg,
             "contrastive": self.loss_feat_contrastive,
         }
+
+        self.uncertainty = uncertainty_weigthing
+        if uncertainty_weigthing:
+            self.uncertainty_weighting = UncertaintyWeighting(len(loss_dict))
 
     def loss_feat_contrastive(self, outputs, *kwargs):
         """
@@ -267,12 +296,16 @@ class SetCriterion(nn.Module):
         return losses
 
     def aggregate_losses(self, losses_dict):
-        weight_dict = {"loss_" + k: v for k, v in self.weight_dict.items()}
-        losses = sum(
-            losses_dict[k] * weight_dict[k]
-            for k in losses_dict.keys()
-            if k in weight_dict
-        )
+        if self.uncertainty:
+            return self.uncertainty_weighting(list(losses_dict.values()))
+
+        else:
+            weight_dict = {"loss_" + k: v for k, v in self.weight_dict.items()}
+            losses = sum(
+                losses_dict[k] * weight_dict[k]
+                for k in losses_dict.keys()
+                if k in weight_dict
+            )
         return losses
 
     def forward(self, outputs, targets, *kwargs):
@@ -294,7 +327,9 @@ class SetMultiCriterion(SetCriterion):
     This class computes the loss for BrainID with a list of results as inputs.
     """
 
-    def __init__(self, loss_dict, params_dict, device):
+    def __init__(
+        self, loss_dict, params_dict, device, uncertainty_weigthing=False
+    ):
         """Create the criterion.
         Parameters:
             args: general exp cfg
@@ -303,7 +338,9 @@ class SetMultiCriterion(SetCriterion):
             loss_names: list of all the losses to be applied. See get_loss for list of
                     available loss_names.
         """
-        super(SetMultiCriterion, self).__init__(loss_dict, params_dict, device)
+        super(SetMultiCriterion, self).__init__(
+            loss_dict, params_dict, device, uncertainty_weigthing
+        )
 
     def get_loss(self, loss_name, outputs_list, targets, samples_list):
         assert (

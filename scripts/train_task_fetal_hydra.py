@@ -74,6 +74,15 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     else:
         resume_ckpt = None
 
+    # If freeze_feat is set, freeze the feature extractor
+    if cfg.get("freeze_feat", False):
+        import pdb
+        pdb.set_trace()
+        log.info("Freezing feature extractor")
+        for param in model.model.backbone.parameters():
+            param.requires_grad = False
+    
+        
     trainer.fit(
     model=model,
     train_dataloaders=datamodule.train_dataloader(),

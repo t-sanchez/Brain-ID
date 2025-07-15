@@ -23,10 +23,10 @@ n_severe_samples: 2
 mask_image: True
 
 
-num_workers: 1
+num_workers: 0
 batch_size: 1
 
 train_patch: True
 patch_size: 96
-patch_boundary: 0
+patch_boundary: 10
 patch_per_subject: 5

@@ -1,22 +1,22 @@
 defaults:
   - model_checkpoint
-  #- early_stopping
-  #- model_summary
-  #- rich_progress_bar
-  #- lr_monitor
-  #- feature_visualizer
+  - early_stopping
+  - model_summary
+  - rich_progress_bar
+  - lr_monitor
+  - feature_visualizer
   - _self_
 
-# qc_metrics:
-#   _target_: BrainID.utils.metrics.QCMetrics
-#   on_train: True
-#   on_val: True
-#   on_test: True
+qc_metrics:
+  _target_: BrainID.utils.metrics.QCMetrics
+  on_train: True
+  on_val: True
+  on_test: True
 
-# visualizer:
-#   _target_: BrainID.utils.visualizer.QCValidationSnapshot
-#   output_dir: ${paths.output_dir}/snapshots
-#   num_slices: 7
+visualizer:
+  _target_: BrainID.utils.visualizer.QCValidationSnapshot
+  output_dir: ${paths.output_dir}/snapshots
+  num_slices: 7
 
 model_checkpoint:
   dirpath: ${paths.output_dir}/checkpoints
@@ -26,10 +26,10 @@ model_checkpoint:
   save_last: True
   auto_insert_metric_name: False
 
-# early_stopping:
-#   monitor: "val/loss"
-#   patience: 200
-#   mode: "min"
+early_stopping:
+  monitor: "val/loss"
+  patience: 200
+  mode: "min"
 
-# model_summary:
-#   max_depth: 1
+model_summary:
+  max_depth: 1

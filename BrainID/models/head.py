@@ -463,6 +463,86 @@ class ScalarHead(nn.Module):
         return {self.out_name: x}
 
 
+class ScalarAggHead(nn.Module):
+    """
+    Task-specific head that takes a list of sample features as inputs
+    """
+
+    def __init__(
+        self,
+        n_classes,
+        out_channels,
+        f_maps_list,
+        fc_maps_list,
+        is_3d=True,
+        dropout=0.5,
+        contrast_dependent=True,
+        out_feat_level=-1,
+    ):
+        super().__init__()
+        self.out_feat_level = out_feat_level
+        self.contrast_dependent = contrast_dependent
+        if self.contrast_dependent:
+            # Add one input image/contrast channel to each feature map
+            f_maps_list = [f + 1 for f in f_maps_list]
+        in_channels = sum(f_maps_list)
+
+        if is_3d:
+            self.global_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
+        else:
+            self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+
+        # Layers will just be a concatenation of the pooled features and two fc layers
+        self.out_name = list(out_channels.keys())[0]
+        self.fc = FCDropout(
+            in_channels,
+            n_classes,
+            fc_maps_list,
+            dropout=dropout,
+        )
+
+    def forward(self, x, image):
+        # Take the input x
+
+        # Apply channel-wise sigmoid to the input x
+        # x = [torch.sigmoid(feat) for feat in x]
+        # Apply channel-wise 0-1 normalization to the input x without sigmoids
+
+        x = [
+            (xi - xi.amin(dim=(2, 3, 4), keepdim=True))
+            / (
+                xi.amax(dim=(2, 3, 4), keepdim=True)
+                - xi.amin(dim=(2, 3, 4), keepdim=True)
+                + 1e-8
+            )
+            for xi in x
+        ]
+
+        if self.contrast_dependent:
+            # Take the input image and downsample by a factor 2 for each feature map
+            image_scaled = [
+                torch.nn.functional.interpolate(
+                    image, scale_factor=1 / (2**i), mode="trilinear"
+                )
+                for i in range(len(x))
+            ]
+
+            # Concatenate the input x and the scaled image
+            x = [
+                torch.cat([feat, img], dim=1)
+                for feat, img in zip(x, image_scaled[::-1])
+            ]
+
+        # Take x and do global pooling of each element in the list
+        x = [self.global_pool(feat) for feat in x]
+        # Concatenate the pooled features
+        x = torch.cat(x, dim=1)
+
+        x = self.fc(x)
+
+        return {self.out_name: x}
+
+
 ################################
 
 

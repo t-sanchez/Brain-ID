@@ -1,7 +1,9 @@
 defaults:
   - generator/generator_mild
   - transforms/inference
-  
+
+generator:
+  device: "cpu"  
 _target_: BrainID.datasets.dataloader.QCDataModule
 
 df: /home/tsanchez/Documents/mial/repositories/Brain-ID/data/qc_data2.csv
@@ -13,5 +15,10 @@ target_key: "qcglobal"
 transform_target: "binarize"
 target_threshold: 1.0
 reweight_train: True
-num_workers: 1
+num_workers: 8
 batch_size: 1
+
+train_patch: True
+patch_size: 164
+patch_boundary: 25
+patch_per_subject: 1

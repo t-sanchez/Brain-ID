@@ -4,28 +4,37 @@ n_batches_vis: 5
 backbone:
   _target_:  BrainID.models.unet3d.model.UNet3D
   in_channels: 1 
-  f_maps: 32
-  f_maps_supervised_seg_cnn: 32
+  f_maps: 48
+  f_maps_supervised_seg_cnn: 48
   num_groups: 8
   num_levels: 5
   layer_order: 'gcl'
   final_sigmoid: False
 head:
-  _target_: BrainID.models.head.ScalarHead
-  in_shape: [1, 256, 256, 256]
+  _target_: BrainID.models.head.ScalarAggHead
   n_classes: 2
   out_channels: 
     pred: 1
-  f_maps_list: [32, 16, 8 ]
-  fc_maps_list: [256, 128]
+  f_maps_list: [48, 96, 192, 384, 768]
+  fc_maps_list: [512, 256, 128]
   is_3d: True
   dropout: 0.5
   contrast_dependent: True
-  out_feat_level: -1
-  conv_kernel: 3
-  conv_padding: 1
-  conv_stride: 2
-  pool_kernel_stride: 4
+  # _target_: BrainID.models.head.ScalarHead
+  # in_shape: [1, 256, 256, 256]
+  # n_classes: 2
+  # out_channels: 
+  #   pred: 1
+  # f_maps_list: [32, 16, 8 ]
+  # fc_maps_list: [256, 128]
+  # is_3d: True
+  # dropout: 0.5
+  # contrast_dependent: True
+  # out_feat_level: -1
+  # conv_kernel: 3
+  # conv_padding: 1
+  # conv_stride: 2
+  # pool_kernel_stride: 4
   
 processor: []
 criterion:

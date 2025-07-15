@@ -1,5 +1,5 @@
 defaults:
-  - data: task_qc
+  - data: task_qc_baseline
   - model: qc_baseline
   - paths: default
   - trainer: default

@@ -369,9 +369,6 @@ class RandomBlockPatchFetalDataset(Dataset):
     ):
         super().__init__()
         self.dataset = dataset
-        assert isinstance(
-            dataset, BrainIDFetalSynthDataset
-        ), "Dataset must be BrainIDFetalSynthDataset"
         self.patch_size = patch_size
         self.boundary = boundary
         self.patch_per_subject = patch_per_subject
@@ -391,9 +388,6 @@ class RandomBlockPatchFetalDataset(Dataset):
             for s in shape
         ]
 
-        # assert all(
-        #    self.boundary * 2 + self.patch_size < s for s in shape
-        # ), f"Patch size + 2*boundary ({self.boundary*2+self.patch_size}) is larger than image size ({shape})"
         max_start = [
             s - self.patch_size - b for s, b in zip(shape, boundary_list)
         ]
@@ -402,10 +396,22 @@ class RandomBlockPatchFetalDataset(Dataset):
         # Return the slice
         slice_idx = []
 
-        for max_, b in zip(max_start, boundary_list):
-            idx = np.random.randint(b, max_)
-            slice_idx.append((idx, idx + self.patch_size))
+        for i, (max_, b) in enumerate(zip(max_start, boundary_list)):
+            if b >= 0:
+                idx = np.random.randint(b, max_)
+                slice_idx.append((idx, idx + self.patch_size))
+            else:
+                slice_idx.append((0, shape[i]))
         return slice_idx
+
+    def get_labels(self):
+        """Get the labels for the dataset."""
+        labels = torch.tensor(self.dataset.df[self.dataset.target_key].values)
+        # apply scale_label in a vectorized way
+
+        for i in range(len(labels)):
+            labels[i] = self.dataset.scale_label(labels[i])[1].item()
+        return labels
 
     def get_sub_samp(self, idx):
         if idx != self.idx_dataset:
@@ -424,24 +430,49 @@ class RandomBlockPatchFetalDataset(Dataset):
         im_size = batch["image"].shape[-3:]
         slice_idx = self.random_patch(im_size)
         slice_ = [slice(*idx) for idx in slice_idx]
+
         subjects_patch = {
-            "input": [],
-            "name": batch["name"],
-            "aff": batch["aff"],
             "slice_patch": slice_idx,
+            **{
+                k: batch[k]
+                for k in batch.keys()
+                if k not in ["input", "label", "image"]
+            },
         }
-        for sample in batch["input"]:
-            subjects_patch["input"].append(
-                sample[:, slice_[0], slice_[1], slice_[2]]
-            )
+
+        if isinstance(batch["input"], list):
+            subjects_patch["input"] = []
+            for sample in batch["input"]:
+                subjects_patch["input"].append(
+                    sample[:, slice_[0], slice_[1], slice_[2]]
+                )
+        else:
+            subjects_patch["input"] = batch["input"][
+                :, slice_[0], slice_[1], slice_[2]
+            ]
         subjects_patch["image"] = batch["image"][
             :, slice_[0], slice_[1], slice_[2]
         ]
-        subjects_patch["label"] = batch["label"][
-            :, slice_[0], slice_[1], slice_[2]
-        ]
+
+        if batch["image"].shape == batch["label"].shape:
+            subjects_patch["label"] = batch["label"][
+                :, slice_[0], slice_[1], slice_[2]
+            ]
+        else:
+            subjects_patch["label"] = batch["label"]
         subjects_patch["shp"] = torch.tensor(subjects_patch["image"].shape)
         subjects_patch["shp_init"] = torch.tensor(batch["image"].shape)
+        assert all(
+            [
+                s <= si
+                for s, si in zip(
+                    subjects_patch["shp"], subjects_patch["shp_init"]
+                )
+            ]
+        ), f"Patch shape exceeds initial shape: {subjects_patch['shp']} > {subjects_patch['shp_init']}"
+        assert all(
+            [s <= self.patch_size for s in subjects_patch["shp"]]
+        ), f"Patch shape exceeds specified patch size: {subjects_patch['shp']} > {self.patch_size}"
 
         return subjects_patch
 

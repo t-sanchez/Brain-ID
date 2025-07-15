@@ -39,7 +39,7 @@ class FeatureDataModule(L.LightningDataModule):
         num_workers: int = 1,
         batch_size: int = 1,
         train_patch: bool = False,
-        patch_size: tuple = (128, 128, 128),
+        patch_size: int = 128,
         patch_boundary: int = 20,
         patch_per_subject: int = 3,
         mask_image: bool = False,
@@ -203,7 +203,7 @@ class FeatureDataModule(L.LightningDataModule):
             sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
-            timeout=120,
+            timeout=120 if self.num_workers > 0 else 0,
             # persistent_workers=True if self.num_workers > 0 else False,
         )
 
@@ -211,10 +211,10 @@ class FeatureDataModule(L.LightningDataModule):
         return DataLoader(
             self.val_ds,
             batch_size=self.batch_size,
-            num_workers=0,
+            num_workers=self.num_workers,
             collate_fn=self.collate,
             pin_memory=False,
-            timeout=120,
+            timeout=120 if self.num_workers > 0 else 0,
         )
 
     def test_dataloader(self):
@@ -223,9 +223,9 @@ class FeatureDataModule(L.LightningDataModule):
         return DataLoader(
             self.test_ds,
             batch_size=self.batch_size,
-            num_workers=0,
+            num_workers=self.num_workers,
             pin_memory=False,
-            timeout=120,
+            timeout=120 if self.num_workers > 0 else 0,
         )
 
 
@@ -246,6 +246,10 @@ class QCDataModule(L.LightningDataModule):
         num_workers: int = 1,
         batch_size: int = 1,
         reweight_train: bool = False,
+        train_patch: bool = False,
+        patch_size: int = 128,
+        patch_boundary: int = 20,
+        patch_per_subject: int = 3,
     ):
         super().__init__()
         self.df = df
@@ -261,6 +265,10 @@ class QCDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.reweight_train = reweight_train
+        self.train_patch = train_patch
+        self.patch_size = patch_size
+        self.patch_boundary = patch_boundary
+        self.patch_per_subject = patch_per_subject
 
         self.train_ds = FetalScalarDataset(
             df=self.df,
@@ -291,6 +299,14 @@ class QCDataModule(L.LightningDataModule):
             transform_target=self.transform_target,
             target_threshold=self.target_threshold,
         )
+
+        if self.train_patch:
+            self.train_ds = RandomBlockPatchFetalDataset(
+                dataset=self.train_ds,
+                patch_size=self.patch_size,
+                boundary=self.patch_boundary,
+                patch_per_subject=self.patch_per_subject,
+            )
 
     def collate(self, batch):
         if len(batch) > 1:

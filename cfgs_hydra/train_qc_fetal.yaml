@@ -24,7 +24,8 @@ resume_optim: True
 resume_lr_scheduler: True
 freeze_feat: False
 load_backbone: False
-feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
+feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/feature_model_feat-anat/ckpt_brainid_best.ckpt
+
 #train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 resume_training: False
 resume_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-09/09-58-15/checkpoints/last.ckpt
@@ -63,6 +64,9 @@ val_epoch: 100000 # must be multiplicable by save_model_epoch
 log_itr: 50
 vis_itr: 5000
 
+wandb:
+  project: "brainid_qc"
+  name: null
 
 #log_itr: 20
 #vis_itr: 1

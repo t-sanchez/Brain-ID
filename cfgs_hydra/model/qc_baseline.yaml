@@ -1,21 +1,21 @@
 _target_: BrainID.models.baselines.baseline_lightning.BaselineModel
 task: "qc"
 n_batches_vis: 5
+# model:
+#   _target_: BrainID.models.baselines.qc.Conv5_FC3
+#   input_size: [1, 256, 256, 256]
+#   norm: "instance"
+#   gpu: True
+#   output_size: 2
+#   dropout: 0.1
 model:
-  _target_: BrainID.models.baselines.qc.Conv5_FC3
-  input_size: [1, 256, 256, 256]
-  norm: "instance"
-  gpu: True
-  output_size: 2
-  dropout: 0.1
-#model:
-#  _target_: BrainID.models.baselines.qc.ModelWrapper
-#  model:
-#    _target_: monai.networks.nets.DenseNet121
-#    spatial_dims: 3
-#    in_channels: 1
-#    out_channels: 2
-#    norm: "instance"
+ _target_: BrainID.models.baselines.qc.ModelWrapper
+ model:
+   _target_: monai.networks.nets.DenseNet121
+   spatial_dims: 3
+   in_channels: 1
+   out_channels: 2
+   norm: "instance"
 criterion:
 
   _target_: BrainID.models.criterion.SetScalarCriterion
