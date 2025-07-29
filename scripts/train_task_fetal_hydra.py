@@ -45,7 +45,6 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
-
     log.info("Instantiating loggers...")
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
@@ -69,7 +68,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         model.load_feature_weights(cfg.get("feat_ckpt"))
         resume_ckpt = None
     elif cfg.resume_training:
-        model = hydra.utils.instantiate(cfg.model, _recursive_=False)
+        model = hydra.utils.instantiate(cfg.model, _recursive_ = True)
         resume_ckpt = cfg.get("resume_ckpt")
     else:
         resume_ckpt = None

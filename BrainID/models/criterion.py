@@ -24,6 +24,7 @@ class SetScalarCriterion(nn.Module):
             "l1": self.loss_l1,
             "l2": self.loss_l2,
             "ce": self.loss_ce,
+            "ce_single_class": self.loss_ce_single_class,
         }
         self.ce = nn.BCEWithLogitsLoss()  ##nn.CrossEntropyLoss()
         self.l1 = nn.L1Loss()
@@ -33,6 +34,10 @@ class SetScalarCriterion(nn.Module):
     def loss_ce(self, outputs, targets, *kwargs):
         loss_ce = self.ce(outputs["pred"], targets["label"].to(self.device))
         return {"loss_ce": loss_ce}
+    
+    def loss_ce_single_class(self, outputs, targets, *kwargs):
+        loss_ce = self.ce(outputs["pred"][:, 1], targets["label"][:, 1].to(self.device))
+        return {"loss_ce_single_class": loss_ce}
 
     def loss_l1(self, outputs, targets, *kwargs):
         loss_l1 = self.l1(outputs["pred"], targets["label"].to(self.device))

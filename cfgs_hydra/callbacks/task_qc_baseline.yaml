@@ -12,6 +12,11 @@ qc_metrics:
   on_val: True
   on_test: True
 
+prediction_test:
+  _target_: BrainID.utils.metrics.PredictionWriterCallback
+  output_dir: ${paths.output_dir}
+  filename: predictions_test.csv
+
 visualizer:
   _target_: BrainID.utils.visualizer.QCValidationSnapshot
   output_dir: ${paths.output_dir}/snapshots

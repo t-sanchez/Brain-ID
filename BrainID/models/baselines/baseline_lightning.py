@@ -44,6 +44,8 @@ class BaselineModel(LightningModule):
 
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
+        self.test_loss = MeanMetric()
+        
         self.input_key = "input"  # if self.task != "seg" else "image"
         self.visualization_data = []
 
@@ -137,6 +139,33 @@ class BaselineModel(LightningModule):
             prog_bar=True,
             add_dataloader_idx=False,
         )
+
+        if batch_idx < self.n_batches_vis:
+            preds_save = {
+                "pred_" + k: [p[k] for p in preds] for k in preds[0].keys()
+            }
+            self.visualization_data.append(
+                {
+                    "inputs": [
+                        x.detach().cpu() for x in batch[self.input_key]
+                    ],
+                    "batch_idx": batch_idx,
+                    **targets,
+                    **preds_save,
+                }
+            )
+
+        return {"loss": losses["loss"], "preds": preds}
+    
+    def test_step(
+        self,
+        batch: Tuple[torch.Tensor, torch.Tensor],
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
+        losses, preds, targets = self.model_step(batch)
+
+        self.test_loss(losses["loss"])
 
         if batch_idx < self.n_batches_vis:
             preds_save = {

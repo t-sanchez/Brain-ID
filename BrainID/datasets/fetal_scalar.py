@@ -29,6 +29,8 @@ class FetalScalarDataset:
         load_key: str = "im",
         transform_target: str = "binarize",
         target_threshold: float = 1.0,
+        b1: float = 6.0,
+        b2: float = 3.0,
     ) -> dict:
         # ToDo: transforms for DA and generator for deformation + also scalar transform
         """
@@ -74,6 +76,8 @@ class FetalScalarDataset:
 
         self.transform_target = transform_target
         self.target_threshold = target_threshold
+        self.b1 = b1
+        self.b2 = b2
         assert self.transform_target in [
             "binarize",
             "soft_binarize",
@@ -107,7 +111,7 @@ class FetalScalarDataset:
             label_trf = torch.tensor([1 - label_trf, label_trf])
         elif self.transform_target == "soft_binarize":
             # Apply asym sigmoid in a vectorized way
-            label_trf = self.asym_sigmoid(label, a=self.target_threshold)
+            label_trf = self.asym_sigmoid(label, a=self.target_threshold, b1=self.b1, b2=self.b2)
             label_trf = torch.tensor([1 - label_trf, label_trf])
         return label_trf
 

@@ -1,9 +1,11 @@
+import csv
 from lightning.pytorch.callbacks import Callback
 from torchmetrics import Accuracy, AUROC, Precision, Recall
 from torchmetrics import Dice
 from BrainID.utils.misc import nested_dict_to_device
 from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
+import os
 
 
 class QCMetrics(Callback):
@@ -66,9 +68,16 @@ class QCMetrics(Callback):
     def _compute_metrics(self, trainer, pl_module, outputs, batch, split):
         batch = nested_dict_to_device(batch, "cpu")
         y_true = batch["label"]
-
+        # y_true can be a tensor with values that are not 0 or 1, check it:
+        if y_true.min() > 0:
+            y_true = (y_true > 0.5).int()
+        
         y_pred = outputs["preds"][0]["pred"]
-
+        # Softmax:
+        if y_pred.sum(dim=-1).max() != 1.0:
+            y_pred = y_pred.softmax(dim=-1)
+        import pdb
+        pdb.set_trace()
         for name, metric in self._metrics[split].items():
             metric.update(y_pred, y_true)
 
@@ -180,3 +189,32 @@ class SegMetrics(Callback):
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if self.on_test:
             self._compute_metrics(trainer, pl_module, outputs, batch, "test")
+
+
+class PredictionWriterCallback(Callback):
+    def __init__(self, output_dir="predictions", filename="test_predictions.csv"):
+        self.output_dir = output_dir
+        self.filename = filename
+        self.all_preds = []
+
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+        # outputs is the return of test_step
+        path = batch["path"]
+        y_true = batch["label"][:,1]
+        y_pred = outputs["preds"][0]["pred"]
+        y_pred = y_pred.softmax(dim=-1)[:,1]
+        self.all_preds.append({
+            "path": path,
+            "pred_good": y_pred.item(),
+            "is_good": y_true.item()
+        })
+
+    def on_test_end(self, trainer, pl_module):
+        os.makedirs(self.output_dir, exist_ok=True)
+        filepath = os.path.join(self.output_dir, self.filename)
+
+        # Write predictions to a CSV file using pd
+        df = pd.DataFrame(self.all_preds)
+        df.to_csv(filepath, index=False)
+
+        print(f"Predictions saved to: {filepath}")

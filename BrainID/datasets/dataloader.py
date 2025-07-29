@@ -243,6 +243,8 @@ class QCDataModule(L.LightningDataModule):
         target_key: str = "qcglobal",
         transform_target: str = "binarize",
         target_threshold: float = 1.0,
+        b1: float = 6.0,
+        b2: float = 3.0,
         num_workers: int = 1,
         batch_size: int = 1,
         reweight_train: bool = False,
@@ -258,6 +260,8 @@ class QCDataModule(L.LightningDataModule):
         self.load_key = load_key
         self.transform_target = transform_target
         self.target_threshold = target_threshold
+        self.b1 = b1
+        self.b2 = b2
         self.train_split = train_split
         self.val_split = val_split
         self.test_split = test_split
@@ -270,6 +274,7 @@ class QCDataModule(L.LightningDataModule):
         self.patch_boundary = patch_boundary
         self.patch_per_subject = patch_per_subject
 
+
         self.train_ds = FetalScalarDataset(
             df=self.df,
             target_key=self.target_key,
@@ -278,6 +283,8 @@ class QCDataModule(L.LightningDataModule):
             load_key=self.load_key,
             transform_target=self.transform_target,
             target_threshold=self.target_threshold,
+            b1=self.b1,
+            b2=self.b2,
         )
 
         self.val_ds = FetalScalarDataset(
@@ -288,6 +295,8 @@ class QCDataModule(L.LightningDataModule):
             load_key=self.load_key,
             transform_target=self.transform_target,
             target_threshold=self.target_threshold,
+            b1=self.b1,
+            b2=self.b2,
         )
 
         self.test_ds = FetalScalarDataset(
@@ -298,6 +307,8 @@ class QCDataModule(L.LightningDataModule):
             load_key=self.load_key,
             transform_target=self.transform_target,
             target_threshold=self.target_threshold,
+            b1=self.b1,
+            b2=self.b2,
         )
 
         if self.train_patch:
@@ -351,7 +362,7 @@ class QCDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
-            timeout=20 if self.num_workers > 0 else 0,
+            #timeout=20 if self.num_workers > 0 else 0,
             persistent_workers=False,
         )
 
@@ -363,7 +374,7 @@ class QCDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
-            timeout=20 if self.num_workers > 0 else 0,
+            #timeout=20 if self.num_workers > 0 else 0,
             persistent_workers=False,
         )
 
@@ -377,7 +388,7 @@ class QCDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
-            timeout=20 if self.num_workers > 0 else 0,
+            #timeout=20 if self.num_workers > 0 else 0,
             persistent_workers=False,
         )
 
