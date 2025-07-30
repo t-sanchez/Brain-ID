@@ -17,3 +17,9 @@ test_split:
 
 num_workers: 1
 batch_size: 1
+
+
+train_patch: True
+patch_size: 180
+patch_boundary: 15
+patch_per_subject: 1

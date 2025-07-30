@@ -1,23 +1,30 @@
 import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
+
+torch.multiprocessing.set_sharing_strategy("file_system")
 from typing import Any, Dict, List, Optional, Tuple
 import hydra
 import lightning as L
 import torch
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import os
 
 
-from BrainID.utils import RankedLogger, instantiate_callbacks, instantiate_loggers
+from BrainID.utils import (
+    RankedLogger,
+    instantiate_callbacks,
+    instantiate_loggers,
+)
+
 os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"
 
-torch.set_float32_matmul_precision('high')
+torch.set_float32_matmul_precision("high")
 log = RankedLogger(__name__, rank_zero_only=True)
 import faulthandler
 
 faulthandler.enable()
+
 
 def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Trains the model. Can additionally evaluate on a testset, using best weights obtained during
@@ -42,21 +49,28 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model = hydra.utils.instantiate(cfg.model)
 
-
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
     log.info("Instantiating loggers...")
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
 
+    for lg in logger:
+        if "WandbLogger" in lg.__class__.__name__:
+            wandb_logger = lg
+            # Converts the OmegaConf into a regular nested dict
+            wandb_logger.experiment.config.update(
+                OmegaConf.to_container(cfg, resolve=True)
+            )
+            break
 
     trainer: Trainer = hydra.utils.instantiate(
         cfg.trainer,
         callbacks=callbacks,
         logger=logger,
-        #fast_dev_run=4,
-        #limit_train_batches=0.05,
-        #limit_val_batches=0.1,
+        # fast_dev_run=4,
+        # limit_train_batches=0.05,
+        # limit_val_batches=0.1,
     )
 
     # Assert either load_backbone or resume_training is set
@@ -68,7 +82,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         model.load_feature_weights(cfg.get("feat_ckpt"))
         resume_ckpt = None
     elif cfg.resume_training:
-        model = hydra.utils.instantiate(cfg.model, _recursive_ = True)
+        model = hydra.utils.instantiate(cfg.model, _recursive_=True)
         resume_ckpt = cfg.get("resume_ckpt")
     else:
         resume_ckpt = None
@@ -76,22 +90,24 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # If freeze_feat is set, freeze the feature extractor
     if cfg.get("freeze_feat", False):
         import pdb
+
         pdb.set_trace()
         log.info("Freezing feature extractor")
         for param in model.model.backbone.parameters():
             param.requires_grad = False
-    
-        
+
     trainer.fit(
-    model=model,
-    train_dataloaders=datamodule.train_dataloader(),
-    val_dataloaders=datamodule.val_dataloader(),
-    ckpt_path = resume_ckpt,
+        model=model,
+        train_dataloaders=datamodule.train_dataloader(),
+        val_dataloaders=datamodule.val_dataloader(),
+        ckpt_path=resume_ckpt,
     )
 
 
 @hydra.main(
-    version_base="1.3", config_path="../cfgs_hydra", config_name="train_qc_fetal"
+    version_base="1.3",
+    config_path="../cfgs_hydra",
+    config_name="train_qc_fetal",
 )
 def main(cfg: DictConfig) -> Optional[float]:
     """Main entry point for training.

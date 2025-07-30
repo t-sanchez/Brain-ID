@@ -40,6 +40,14 @@ class QCMetrics(Callback):
         if self.on_test:
             self._metrics["test"] = self._get_metrics_dict()
 
+        self._metrics_softmax = {}
+        if self.on_train:
+            self._metrics_softmax["train"] = self._get_metrics_dict()
+        if self.on_val:
+            self._metrics_softmax["val"] = self._get_metrics_dict()
+        if self.on_test:
+            self._metrics_softmax["test"] = self._get_metrics_dict()
+
     def _train_and_pred_fetmrqc(self):
         rf = RandomForestClassifier()
         # All columns after centroid
@@ -71,20 +79,30 @@ class QCMetrics(Callback):
         # y_true can be a tensor with values that are not 0 or 1, check it:
         if y_true.min() > 0:
             y_true = (y_true > 0.5).int()
-        
+
         y_pred = outputs["preds"][0]["pred"]
         # Softmax:
-        if y_pred.sum(dim=-1).max() != 1.0:
-            y_pred = y_pred.softmax(dim=-1)
-        import pdb
-        pdb.set_trace()
+
         for name, metric in self._metrics[split].items():
             metric.update(y_pred, y_true)
-
+        if y_pred.sum(dim=-1).max() != 1.0:
+            y_pred = y_pred.softmax(dim=-1)
+        for name, metric in self._metrics_softmax[split].items():
+            metric.update(y_pred, y_true)
         pl_module.log_dict(
             {
                 f"{split}/{name}": metric.compute()
                 for name, metric in self._metrics[split].items()
+            },
+            on_step=True,
+            on_epoch=True,
+            batch_size=len(y_true),
+        )
+
+        pl_module.log_dict(
+            {
+                f"{split}/{name}_softmax": metric.compute()
+                for name, metric in self._metrics_softmax[split].items()
             },
             on_step=True,
             on_epoch=True,
@@ -192,22 +210,28 @@ class SegMetrics(Callback):
 
 
 class PredictionWriterCallback(Callback):
-    def __init__(self, output_dir="predictions", filename="test_predictions.csv"):
+    def __init__(
+        self, output_dir="predictions", filename="test_predictions.csv"
+    ):
         self.output_dir = output_dir
         self.filename = filename
         self.all_preds = []
 
-    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+    def on_test_batch_end(
+        self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
+    ):
         # outputs is the return of test_step
         path = batch["path"]
-        y_true = batch["label"][:,1]
+        y_true = batch["label"][:, 1]
         y_pred = outputs["preds"][0]["pred"]
-        y_pred = y_pred.softmax(dim=-1)[:,1]
-        self.all_preds.append({
-            "path": path,
-            "pred_good": y_pred.item(),
-            "is_good": y_true.item()
-        })
+        y_pred = y_pred.softmax(dim=-1)[:, 1]
+        self.all_preds.append(
+            {
+                "path": path,
+                "pred_good": y_pred.item(),
+                "is_good": y_true.item(),
+            }
+        )
 
     def on_test_end(self, trainer, pl_module):
         os.makedirs(self.output_dir, exist_ok=True)

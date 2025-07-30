@@ -11,11 +11,13 @@ defaults:
 ## job specific set ups ##
 job_name: seg_run
 exp_name: seg
-
+logger:
+  wandb:
+    project: brainid_seg
 device: "cuda:0"
 device_generator:
 data:
-  num_workers: 0
+  num_workers: 1
 
 eval_only: False 
 debug: False 
@@ -25,10 +27,10 @@ reset_epoch: False
 resume_optim: True
 resume_lr_scheduler: True
 freeze_feat: False
-load_backbone: True
-feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-01/18-23-20/checkpoints/last.ckpt
+load_backbone: True 
+feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/best_feat_marinas/last.ckpt
 resume_training: False
-resume_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/seg_run_seg/2025-05-07/16-54-23/checkpoints/last.ckpt
+resume_ckpt: null #/home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/seg_run_seg/2025-05-07/16-54-23/checkpoints/last.ckpt
 
 ## paths 
 out_dir: outs/BrainID

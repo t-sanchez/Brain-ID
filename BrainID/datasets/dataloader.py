@@ -162,17 +162,21 @@ class FeatureDataModule(L.LightningDataModule):
         assert "participant_id" in split_df.columns
         assert "splits" in split_df.columns
 
-        train_subjects = sorted(split_df[
-            split_df.splits == self.train_split
-        ].participant_id.tolist())
+        train_subjects = sorted(
+            split_df[
+                split_df.splits == self.train_split
+            ].participant_id.tolist()
+        )
 
-        val_subjects = sorted(split_df[
-            split_df.splits == self.val_split
-        ].participant_id.tolist())
+        val_subjects = sorted(
+            split_df[split_df.splits == self.val_split].participant_id.tolist()
+        )
 
-        test_subjects = sorted(split_df[
-            split_df.splits == self.test_split
-        ].participant_id.tolist())
+        test_subjects = sorted(
+            split_df[
+                split_df.splits == self.test_split
+            ].participant_id.tolist()
+        )
 
         return train_subjects, val_subjects, test_subjects
 
@@ -274,7 +278,6 @@ class QCDataModule(L.LightningDataModule):
         self.patch_boundary = patch_boundary
         self.patch_per_subject = patch_per_subject
 
-
         self.train_ds = FetalScalarDataset(
             df=self.df,
             target_key=self.target_key,
@@ -362,7 +365,7 @@ class QCDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
-            #timeout=20 if self.num_workers > 0 else 0,
+            # timeout=20 if self.num_workers > 0 else 0,
             persistent_workers=False,
         )
 
@@ -374,7 +377,7 @@ class QCDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
-            #timeout=20 if self.num_workers > 0 else 0,
+            # timeout=20 if self.num_workers > 0 else 0,
             persistent_workers=False,
         )
 
@@ -388,7 +391,7 @@ class QCDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
-            #timeout=20 if self.num_workers > 0 else 0,
+            # timeout=20 if self.num_workers > 0 else 0,
             persistent_workers=False,
         )
 
@@ -409,6 +412,10 @@ class SegDataModule(L.LightningDataModule):
         transforms: monai.transforms.Compose,
         num_workers: int = 1,
         batch_size: int = 1,
+        train_patch: bool = False,
+        patch_size: int = 128,
+        patch_boundary: int = 20,
+        patch_per_subject: int = 2,
     ):
         super().__init__()
         self.split_file = split_file
@@ -423,6 +430,11 @@ class SegDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.transform = transforms
+        self.train_patch = train_patch
+        self.patch_size = patch_size
+        self.patch_boundary = patch_boundary
+        self.patch_per_subject = patch_per_subject
+
         assert self.train_type in ["synth", "real"]
         assert self.val_type in ["synth", "real", "test"]
 
@@ -487,6 +499,14 @@ class SegDataModule(L.LightningDataModule):
         logging.info(f"Train dataset size: {len(self.train_ds)}")
         logging.info(f"Val dataset size: {len(self.val_ds)}")
         logging.info(f"Test dataset size: {len(self.test_ds)}")
+
+        if self.train_patch:
+            self.train_ds = RandomBlockPatchFetalDataset(
+                dataset=self.train_ds,
+                patch_size=self.patch_size,
+                boundary=self.patch_boundary,
+                patch_per_subject=self.patch_per_subject,
+            )
 
     def get_subjects(self):
         split_df = pd.read_csv(self.split_file)

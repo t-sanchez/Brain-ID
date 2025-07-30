@@ -298,7 +298,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
             affine = output.affine
             # 2. Spatially deform the data
             im_out, segm_out, output = (
-                self.generator.spatial_deform.apply_deformation_and_flip(
+                generator.spatial_deform.apply_deformation_and_flip(
                     im_run, segm_run, output, xx2, yy2, zz2, flip
                 )
             )
@@ -533,6 +533,7 @@ class FetalSynthIDDataset(FetalSynthDataset):
         sub_list: list[str] | None,
         load_image: bool = False,
         image_as_intensity: bool = False,
+        mask_image: bool = False,
     ):
         super().__init__(
             bids_path,
@@ -542,6 +543,75 @@ class FetalSynthIDDataset(FetalSynthDataset):
             load_image,
             image_as_intensity,
         )
+
+        self.crop_input_fn = CropWithAsymmetricMargind(
+            keys=["image", "segmentation", "seeds"],
+            source_key="segmentation",
+            margins=[(0, 0), (0, 0), (0, 0)],
+            allow_missing_keys=True,
+        )
+        self.max_margin = 25
+        self.mask_image = mask_image
+
+    def crop_input(self, image, segmentation, seeds=None) -> dict:
+        """
+        Crop the input image, segmentation, and seeds to the foreground defined by the segmentation mask.
+        This is useful to remove unnecessary background and focus on the region of interest.
+
+        Args:
+            image: Input image tensor.
+            segmentation: Segmentation tensor.
+            seeds: Optional seeds tensor.
+
+        Returns:
+            A dictionary with cropped image, segmentation, and seeds (if provided).
+        """
+        if len(image.shape) == 3:
+            image = image.unsqueeze(0)
+        if len(segmentation.shape) == 3:
+            segmentation = segmentation.unsqueeze(0)
+        if seeds is not None and len(seeds.shape) == 3:
+            seeds = seeds.unsqueeze(0)
+        in_dict = {"image": image, "segmentation": segmentation}
+        if seeds is not None:
+            in_dict["seeds"] = seeds
+
+        poisson_lam = np.random.randint(1, 15)
+        x_left = np.random.poisson(lam=poisson_lam)
+        x_right = np.random.poisson(lam=poisson_lam)
+        y_top = np.random.poisson(lam=poisson_lam)
+        y_bottom = np.random.poisson(lam=poisson_lam)
+        z_front = np.random.poisson(lam=poisson_lam)
+        z_back = np.random.poisson(lam=poisson_lam)
+
+        x_left = min(x_left, self.max_margin - 1)
+
+        x_right = min(x_right, self.max_margin - x_left - 1)
+
+        y_top = min(y_top, self.max_margin - 1)
+
+        y_bottom = min(y_bottom, self.max_margin - y_top - 1)
+
+        z_front = min(z_front, self.max_margin - 1)
+
+        z_back = min(z_back, self.max_margin - z_front - 1)
+
+        margins = [[x_left, x_right], [y_top, y_bottom], [z_front, z_back]]
+
+        out_dict = self.crop_input_fn(in_dict, margins)
+        vol = np.prod(out_dict["segmentation"].shape)
+        shape_red = (1 - vol / 256**3) * 100
+
+        for k, v in out_dict.items():
+            out_dict[k] = v.squeeze()
+        if "seeds" in out_dict:
+            return (
+                out_dict["image"],
+                out_dict["segmentation"],
+                out_dict["seeds"],
+            )
+
+        return out_dict["image"], out_dict["segmentation"]
 
     def sample(self, idx, genparams: dict = {}) -> tuple[dict, dict]:
         """
@@ -592,13 +662,61 @@ class FetalSynthIDDataset(FetalSynthDataset):
         # log input data
         generation_params["idx"] = idx
         generation_params["img_paths"] = str(self.img_paths[idx])
-        generation_params["segm_paths"] = str(self.img_paths[idx])
+        generation_params["segm_paths"] = str(self.segm_paths[idx])
         generation_params["seeds"] = str(self.seed_path)
         generation_time_start = time.time()
 
+        # Generate the contrast image
+
+        seeds, selected_seeds = self.generator.intensity_generator.load_seeds(
+            seeds=seeds, genparams=genparams.get("selected_seeds", {})
+        )
+
+        image, segm, seeds = self.crop_input(
+            image=image,
+            segmentation=segm,
+            seeds=seeds,
+        )
+
+        xx2, yy2, zz2, flip, deform_params = (
+            self.generator.spatial_deform.generate_deformation_and_flip(
+                image_shape=seeds.shape,
+                genparams=genparams,
+            )
+        )
+
+        # ensure that tensors are on the same device
+
+        device = self.generator.device
+        im_run = image.to(device).clone() if image is not None else None
+        segm_run = segm.to(device).clone()
+        synth_params_defaultdict = defaultdict(list)
+
+        # 1. Generate intensity output.
+        output, seed_intensities = (
+            self.generator.intensity_generator.sample_intensities(
+                seeds=seeds,
+                device=device,
+                genparams=genparams.get("seed_intensities", {}),
+            )
+        )
+        output = output.to(device)
+        affine = output.affine
+        # 2. Spatially deform the data
+        im_out, segm_out, output = (
+            self.generator.spatial_deform.apply_deformation_and_flip(
+                im_run, segm_run, output, xx2, yy2, zz2, flip
+            )
+        )
+        synth_params = {
+            "selected_seeds": selected_seeds,
+            "seed_intensities": seed_intensities,
+            "deform_params": deform_params,
+        }
+
         # generate the synthetic data
-        gen_output, segmentation, image, synth_params = self.generator.sample(
-            image=image, segmentation=segm, seeds=seeds, genparams=genparams
+        gen_output, synth_params_aug = self.generator.augment(
+            image=output, segmentation=segm_out, genparams=genparams
         )
 
         # scale the images to [0, 1]
@@ -607,18 +725,109 @@ class FetalSynthIDDataset(FetalSynthDataset):
 
         # ensure image and segmentation are on the cpu
         gen_output = gen_output.cpu()
-        segmentation = segmentation.cpu()
-        image = image.cpu() if image is not None else None
 
-        generation_params = {**generation_params, **synth_params}
+        synth_params = synth_params.update(synth_params_aug)
+        for k, v in synth_params_aug.items():
+            synth_params_defaultdict[k].append(v)
+
+        if self.mask_image:
+            mask = segm_out > 0
+            im_out = im_out * mask if im_out is not None else None
+        im_out = im_out.cpu() if im_out is not None else None
+        segm_out = segm_out.cpu()
+
+        generation_params = {**generation_params, **synth_params_defaultdict}
         generation_params["generation_time"] = (
             time.time() - generation_time_start
         )
+
         data_out = {
             "input": gen_output.unsqueeze(0),
-            "image": image.unsqueeze(0) if image is not None else None,
-            "label": segmentation.unsqueeze(0).long(),
+            "image": im_out.unsqueeze(0) if image is not None else None,
+            "label": segm_out.unsqueeze(0).long(),
+            "aff": affine.cpu(),
+            "shp": torch.tensor(segm_out.shape).cpu(),
             "name": name,
         }
 
         return data_out, generation_params
+
+    # def sample(self, idx, genparams: dict = {}) -> tuple[dict, dict]:
+    #     """
+    #     Retrieve a single item from the dataset at the specified index.
+
+    #     Args:
+    #         idx (int): The index of the item to retrieve.
+    #         genparams (dict): Dictionary with generation parameters.
+    #             Used for fixed generation. Should follow exactly the same structure
+    #             and be of the same type as the returned generation parameters.
+    #             Can be used to replicate the augmentations (power)
+    #             used for the generation of a specific sample.
+    #     Returns:
+    #         Dictionaries with the generated data and the generation parameters.
+    #             First dictionary contains the `image`, `label` and the `name` keys.
+    #             The second dictionary contains the parameters used for the generation.
+
+    #     !!! Note
+    #         The `image` is scaled to `[0, 1]` and oriented with the `label` to **RAS**
+    #         and returned on the device  specified in the `generator` initialization.
+    #     """
+    #     # use generation_params to track the parameters used for the generation
+    #     generation_params = {}
+
+    #     image = self.loader(self.img_paths[idx]) if self.load_image else None
+    #     segm = self.loader(self.segm_paths[idx])
+
+    #     # orient to RAS for consistency
+    #     image = (
+    #         self.orientation(image.unsqueeze(0)).squeeze(0)
+    #         if self.load_image
+    #         else None
+    #     )
+    #     segm = self.orientation(segm.unsqueeze(0)).squeeze(0)
+
+    #     # transform name into a single string otherwise collate fails
+    #     name = self.sub_ses[idx]
+    #     name = self._sub_ses_string(name[0], ses=name[1])
+
+    #     # initialize seeds as dictionary
+    #     # with paths to the seeds volumes
+    #     # or None if image is to be used as intensity prior
+    #     if self.seed_path is not None:
+    #         seeds = self.seed_paths[name]
+    #     if self.image_as_intensity:
+    #         seeds = None
+
+    #     # log input data
+    #     generation_params["idx"] = idx
+    #     generation_params["img_paths"] = str(self.img_paths[idx])
+    #     generation_params["segm_paths"] = str(self.img_paths[idx])
+    #     generation_params["seeds"] = str(self.seed_path)
+    #     generation_time_start = time.time()
+
+    #     # generate the synthetic data
+    #     gen_output, segmentation, image, synth_params = self.generator.sample(
+    #         image=image, segmentation=segm, seeds=seeds, genparams=genparams
+    #     )
+
+    #     # scale the images to [0, 1]
+    #     gen_output = self.scaler(gen_output)
+    #     image = self.scaler(image) if image is not None else None
+
+    #     # ensure image and segmentation are on the cpu
+    #     gen_output = gen_output.cpu()
+    #     segmentation = segmentation.cpu()
+    #     image = image.cpu() if image is not None else None
+
+    #     generation_params = {**generation_params, **synth_params}
+    #     generation_params["generation_time"] = (
+    #         time.time() - generation_time_start
+    #     )
+    #     data_out = {
+    #         "input": gen_output.unsqueeze(0),
+    #         "image": image.unsqueeze(0) if image is not None else None,
+    #         "label": segmentation.unsqueeze(0).long(),
+    #         "name": name,
+    #     }
+
+    #     return data_out, generation_params

@@ -8,39 +8,25 @@ defaults:
   - _self_
   
 ## job specific set ups ##
-job_name: qc_run
-exp_name: qc
 
 device: "cuda:0"
 device_generator:
-
+logger:
+  wandb:
+    name: "QC_load_backbone_marina"
+    project: brainid_qc
 
 eval_only: False 
 debug: False 
 
-resume: False
-reset_epoch: False 
-resume_optim: True
-resume_lr_scheduler: True
 freeze_feat: False
-load_backbone: False
-feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/feature_model_feat-anat/ckpt_brainid_best.ckpt
-
+load_backbone: True
+feat_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/best_feat_marinas/last.ckpt
 #train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 resume_training: False
 resume_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/2025-05-09/09-58-15/checkpoints/last.ckpt
 ## paths 
-out_dir: outs/BrainID
-
-
-supervised_seg_cnn_weights:  
-feat_ext_ckp_path:
-ckp_path:
-
-## training params
-start_epoch: 0
-train_itr_limit: # if not None, it sets the max itr per epoch 
-train_subset: #0.2
+out_dir: outs/BrainID/QC
 
 n_epochs: 400
 
