@@ -13,7 +13,7 @@ device: "cuda:0"
 device_generator:
 logger:
   wandb:
-    name: "QC_load_backbone_marina"
+    name: "QC_ft_no_aug"
     project: brainid_qc
 
 eval_only: False 

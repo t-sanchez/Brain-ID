@@ -205,10 +205,10 @@ class FetalScalarDataset:
             "input": img.unsqueeze(0).contiguous(),
             "label": label_trf.contiguous(),
             "path": img_path,
+            "image": img_orig.unsqueeze(0).contiguous(),
         }
 
         if self.generator is not None:
-            data["image"] = img_orig.unsqueeze(0).contiguous()
             data["synth_params"] = (
                 synth_params  # Should be small dict/float, no memory risk
             )
@@ -334,6 +334,4 @@ class FetalSegmDataset:
             data["input_orig"] = img_orig.cpu().unsqueeze(0)
             data["synth_params"] = synth_params
 
-        if idx % 25 == 0:
-            print_open_fds("Dataloader")
         return data

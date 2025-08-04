@@ -279,6 +279,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
         im_run = image.to(device).clone() if image is not None else None
         segm_run = segm.to(device).clone()
         samples = []
+        samples_no_artifacts = []
         synth_params_defaultdict = defaultdict(list)
         for i in range(self.n_mild_samples + self.n_severe_samples):
             if i < self.n_mild_samples:
@@ -302,6 +303,9 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
                     im_run, segm_run, output, xx2, yy2, zz2, flip
                 )
             )
+            
+            output_saved = self.scaler(output.clone())
+            samples_no_artifacts.append(output_saved.cpu().unsqueeze(0))
             synth_params = {
                 "selected_seeds": selected_seeds,
                 "seed_intensities": seed_intensities,
@@ -316,7 +320,6 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
             # scale the images to [0, 1]
             gen_output = self.scaler(gen_output)
             image = self.scaler(image) if image is not None else None
-
             # ensure image and segmentation are on the cpu
             gen_output = gen_output.cpu()
 
@@ -339,6 +342,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
         data_out = {
             "input": samples,
             "name": name,
+            "input_no_artifacts": samples_no_artifacts,
             "image": im_out.unsqueeze(0) if image is not None else None,
             "label": segm_out.unsqueeze(0).long(),
             "aff": affine.cpu(),
@@ -436,23 +440,21 @@ class RandomBlockPatchFetalDataset(Dataset):
             **{
                 k: batch[k]
                 for k in batch.keys()
-                if k not in ["input", "label", "image"]
+                if k not in ["input", "label", "image", "input_no_artifacts"]
             },
         }
 
-        if isinstance(batch["input"], list):
-            subjects_patch["input"] = []
-            for sample in batch["input"]:
-                subjects_patch["input"].append(
-                    sample[:, slice_[0], slice_[1], slice_[2]]
-                )
-        else:
-            subjects_patch["input"] = batch["input"][
-                :, slice_[0], slice_[1], slice_[2]
-            ]
-        subjects_patch["image"] = batch["image"][
-            :, slice_[0], slice_[1], slice_[2]
-        ]
+        for k in ["input", "input_no_artifacts", "image"]:
+            if isinstance(batch[k], list):
+                subjects_patch[k] = []
+                for sample in batch[k]:
+                    subjects_patch[k].append(
+                        sample[:, slice_[0], slice_[1], slice_[2]]
+                    )
+            else:
+                subjects_patch[k] = batch[k][
+                    :, slice_[0], slice_[1], slice_[2]
+                ]
 
         if batch["image"].shape == batch["label"].shape:
             subjects_patch["label"] = batch["label"][

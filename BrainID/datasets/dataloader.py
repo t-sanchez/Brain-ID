@@ -191,7 +191,10 @@ class FeatureDataModule(L.LightningDataModule):
             k: v.unsqueeze(0) if torch.is_tensor(v) else v
             for k, v in batch.items()
         }
-        batch["input"] = [x.unsqueeze(0) for x in batch["input"]]
+        for k in ["input", "input_no_artifacts"]:
+            if k in batch:
+                if isinstance(batch[k], list):
+                    batch[k] = [x.unsqueeze(0) for x in batch[k]]
         return batch
 
     def train_dataloader(self):
@@ -216,6 +219,7 @@ class FeatureDataModule(L.LightningDataModule):
             self.val_ds,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            multiprocessing_context="spawn" if self.num_workers > 0 else None,
             collate_fn=self.collate,
             pin_memory=False,
             timeout=120 if self.num_workers > 0 else 0,
@@ -228,6 +232,8 @@ class FeatureDataModule(L.LightningDataModule):
             self.test_ds,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            multiprocessing_context="spawn" if self.num_workers > 0 else None,
+            collate_fn=self.collate,
             pin_memory=False,
             timeout=120 if self.num_workers > 0 else 0,
         )

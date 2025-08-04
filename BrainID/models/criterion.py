@@ -161,6 +161,8 @@ class SetCriterion(nn.Module):
             "sr_grad": self.loss_sr_grad,
             "image": self.loss_image,
             "image_grad": self.loss_image_grad,
+            "artifact": self.loss_artifact,
+            "artifact_grad": self.loss_artifact_grad,
             "bias_field_log": self.loss_bias_field_log,
             "supervised_seg": self.loss_supervised_seg,
             "contrastive": self.loss_feat_contrastive,
@@ -232,6 +234,14 @@ class SetCriterion(nn.Module):
     def loss_sr_grad(self, outputs, targets, samples):
         loss_sr_grad = self.grad(outputs["image"], samples["orig"])
         return {"loss_sr_grad": loss_sr_grad}
+
+    def loss_artifact(self, outputs, targets, samples):
+        loss = self.loss_regression(outputs["contrast_image"], samples["input_no_artifacts"])
+        return {"loss_artifact": loss}
+
+    def loss_artifact_grad(self, outputs, targets, samples):
+        grad = self.grad(outputs["contrast_image"], samples["input_no_artifacts"])
+        return {"loss_artifact_grad": grad}
 
     def loss_image(self, outputs, targets, *kwargs):
         if self.loss_regression_type != "l1":

@@ -12,7 +12,9 @@ defaults:
 job_name: feature_model
 exp_name: feat-anat
 #init_method: "tcp://localhost:9992"
-
+logger:
+  wandb:
+    name: feat_w_artifact_removal_no_uncweight
 device: "cuda:0"
 device_generator:
 data:

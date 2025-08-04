@@ -4,7 +4,7 @@ defaults:
   - transforms/inference
 _target_: BrainID.datasets.dataloader.FeatureDataModule
 
-split_file: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled0p5/splits.csv
+split_file: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled0p5/dHCP_splits_stratified.csv
 bids_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled0p5
 seed_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/seeds0p5
 

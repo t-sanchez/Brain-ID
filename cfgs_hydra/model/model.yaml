@@ -14,6 +14,7 @@ head:
   f_maps_list: [48]
   out_channels: 
     image: 1
+    contrast_image: 1
     seg: 10
   is_3d: True
   out_feat_level: -1 
@@ -25,17 +26,19 @@ criterion:
     uncertainty: # only for recon or sr (regression tasks); options: { gaussian, laplace }
     bias_field_log_type: l2 # l1 or l2 
   loss_dict:
-    image:  1.0
-    image_grad: 1.0
+    image:  0.5
+    image_grad: 0.5
     seg_dice_ce:  1.0
-  uncertainty_weigthing: True
+    artifact: 0.5
+    artifact_grad: 0.5
+  uncertainty_weigthing: False
 
 
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: true
   lr: 0.0001
-  weight_decay: 0.01
+  weight_decay: 0.0001
   betas: [0.9, 0.98]
   fused: true
 
@@ -44,7 +47,7 @@ scheduler:
   _partial_: true
   warmup_epochs: 10
   total_epochs: 400
-  power: 2.0
+  power: 0.9
 # scheduler:
 #   _target_: torch.optim.lr_scheduler.MultiStepLR
 #   _partial_: true

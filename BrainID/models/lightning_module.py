@@ -60,6 +60,7 @@ class BrainIDModel(LightningModule):
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
         self.input_key = "input"  # if self.task != "seg" else "image"
+        self.sample_keys = [self.input_key, "input_no_artifacts"]
 
     def forward(self, samples: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
@@ -95,12 +96,11 @@ class BrainIDModel(LightningModule):
         """
 
         batch = nested_dict_to_device(batch, self.device)
-
+        
         outputs = self.forward(batch[self.input_key])
-
         subjects = {k: batch[k] for k in batch.keys() if k != self.input_key}
-        samples = [{self.input_key: x} for x in batch[self.input_key]]
-
+        samples = [{k: batch[k][i] for k in self.sample_keys}
+                   for i in range(len(batch[self.input_key]))]
         losses = self.criterion(outputs, subjects, samples)
         return (
             losses,
