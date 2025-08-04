@@ -4,7 +4,7 @@ import lightning as L
 import torch
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import os
 
 from BrainID.utils import RankedLogger, instantiate_callbacks, instantiate_loggers
@@ -44,6 +44,15 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     log.info("Instantiating loggers...")
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
+
+    for lg in logger:
+        if "WandbLogger" in lg.__class__.__name__:
+            wandb_logger = lg
+            # Converts the OmegaConf into a regular nested dict
+            wandb_logger.experiment.config.update(
+                OmegaConf.to_container(cfg, resolve=True)
+            )
+            break
 
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
 
