@@ -192,3 +192,31 @@ def get_model(model_config):
         model_config["name"], modules=["pytorch3dunet.unet3d.model"]
     )
     return model_class(**model_config)
+
+
+from monai.networks.nets import UNet
+import torch
+import torch.nn as nn
+
+
+import torch
+import torch.nn as nn
+from monai.networks.nets import DynUNet
+from torch.nn.functional import interpolate
+
+
+class DynUNetWrapper(DynUNet):
+    def forward(self, x):
+        out = self.skip_layers(x)
+        out = self.output_block(out)
+        return out
+
+    def get_feature(self, x):
+        out = self.skip_layers(x)
+        out = self.output_block(out)
+        assert self.deep_supervision
+        out_all = [out]
+        for feature_map in self.heads:
+            out_all.append(feature_map)
+        out_all.reverse()
+        return out_all

@@ -15,7 +15,7 @@ from fetalsyngen.data.datasets import FetalSynthDataset
 from fetalsyngen.generator.model import FetalSynthGen
 import time
 from collections import defaultdict
-from monai.transforms import CropForegroundd
+from monai.transforms import CropForegroundd, DivisiblePadd, Compose
 import torch
 from monai.transforms import MapTransform
 from monai.config import KeysCollection
@@ -133,6 +133,11 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
             margins=[(0, 0), (0, 0), (0, 0)],
             allow_missing_keys=True,
         )
+        self.divisible_pad = DivisiblePadd(
+                keys=["image", "segmentation", "seeds"],
+                k=32,  # or whatever divisibility you need
+                allow_missing_keys=True,
+            )
         self.max_margin = 25
 
     def crop_input(self, image, segmentation, seeds=None) -> dict:
@@ -181,6 +186,7 @@ class BrainIDFetalSynthDataset(FetalSynthDataset):
         margins = [[x_left, x_right], [y_top, y_bottom], [z_front, z_back]]
 
         out_dict = self.crop_input_fn(in_dict, margins)
+        out_dict = self.divisible_pad(out_dict)
         vol = np.prod(out_dict["segmentation"].shape)
         shape_red = (1 - vol / 256**3) * 100
 
@@ -552,6 +558,11 @@ class FetalSynthIDDataset(FetalSynthDataset):
             margins=[(0, 0), (0, 0), (0, 0)],
             allow_missing_keys=True,
         )
+        self.divisible_pad = DivisiblePadd(
+            keys=["image", "segmentation", "seeds"],
+            k=32,  # or whatever divisibility you need
+            allow_missing_keys=True,
+        )
         self.max_margin = 25
         self.mask_image = mask_image
 
@@ -601,6 +612,7 @@ class FetalSynthIDDataset(FetalSynthDataset):
         margins = [[x_left, x_right], [y_top, y_bottom], [z_front, z_back]]
 
         out_dict = self.crop_input_fn(in_dict, margins)
+        out_dict = self.divisible_pad(out_dict)
         vol = np.prod(out_dict["segmentation"].shape)
         shape_red = (1 - vol / 256**3) * 100
 

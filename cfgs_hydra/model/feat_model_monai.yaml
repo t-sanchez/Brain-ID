@@ -1,0 +1,91 @@
+_target_: BrainID.models.lightning_module.BrainIDModel
+task: "feat-anat"
+# backbone:
+#   _target_:  BrainID.models.unet3d.model.UNetWrapper
+#   act: leakyrelu
+#   norm: instance
+#   dropout: 0
+#   strides: [2, 2, 2, 2]
+#   channels: [32, 64, 128, 256, 512]
+#   in_channels: 1
+#   kernel_size: 3
+#   out_channels: 32
+#   spatial_dims: 3
+#   num_res_units: 2
+#   up_kernel_size: 3
+backbone:
+  _target_: BrainID.models.unet3d.model.DynUNetWrapper
+  spatial_dims: 3
+  in_channels: 1
+  out_channels: 48
+  filters: [32, 64, 128, 256, 512]  
+  kernel_size:
+    - [3, 3, 3]
+    - [3, 3, 3]
+    - [3, 3, 3]
+    - [3, 3, 3]
+    - [3, 3, 3]
+    
+  strides:
+    - [1, 1, 1]
+    - 2
+    - 2
+    - 2
+    - 2
+  upsample_kernel_size:
+    - [2,2,2]
+    - [2,2,2]
+    - [2,2,2]
+    - [2,2,2]
+    - [2,2,2]
+  deep_supervision: True
+  deep_supr_num: 3
+
+
+
+head:
+  _target_: BrainID.models.head.IndepHead
+  f_maps_list: [48]
+  out_channels: 
+    image: 1
+    contrast_image: 1
+    seg: 10
+  is_3d: True
+  out_feat_level: -1 
+processor: []
+criterion:
+  _target_: BrainID.models.criterion.SetMultiCriterion
+  device: ${device}
+  params_dict:
+    uncertainty: # only for recon or sr (regression tasks); options: { gaussian, laplace }
+    bias_field_log_type: l2 # l1 or l2 
+  loss_dict:
+    image:  0.5
+    image_grad: 0.5
+    seg_dice_ce:  1.0
+    artifact: 0.5
+    artifact_grad: 0.5
+  uncertainty_weigthing: False
+
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.0001
+  weight_decay: 0.0001
+  betas: [0.9, 0.98]
+  fused: true
+
+scheduler:
+  _target_: BrainID.utils.scheduler.PolynomialWarmupDecayLR
+  _partial_: true
+  warmup_epochs: 10
+  total_epochs: 400
+  power: 0.9
+# scheduler:
+#   _target_: torch.optim.lr_scheduler.MultiStepLR
+#   _partial_: true
+#   milestones: [300, 350]
+#   gamma: 0.1
+
+  

@@ -1,0 +1,32 @@
+defaults:
+  - generator/generator_mild@generator_mild
+  - generator/generator_severe@generator_severe
+  - transforms/inference
+_target_: BrainID.datasets.dataloader.FeatureDataModule
+
+split_file: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled0p5/dHCP_splits_stratified.csv
+bids_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/resampled0p5
+seed_path: /media/tsanchez/tsanchez_data/data/fetal_dHCP/derivatives/derivatives/seeds0p5
+
+train_type: "synth"
+train_split: "train"
+
+val_type: "synth"
+val_split: "val"
+
+test_split: 
+transforms: 
+
+n_all_samples: 4
+n_mild_samples: 2
+n_severe_samples: 2
+mask_image: True
+
+
+num_workers: 0
+batch_size: 1
+
+train_patch: True
+patch_size: 160
+patch_boundary: 0
+patch_per_subject: 1

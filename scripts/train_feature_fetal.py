@@ -7,10 +7,15 @@ from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig, OmegaConf
 import os
 
-from BrainID.utils import RankedLogger, instantiate_callbacks, instantiate_loggers
+from BrainID.utils import (
+    RankedLogger,
+    instantiate_callbacks,
+    instantiate_loggers,
+)
+
 os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"
 
-torch.set_float32_matmul_precision('medium')
+torch.set_float32_matmul_precision("medium")
 log = RankedLogger(__name__, rank_zero_only=True)
 
 
@@ -37,8 +42,6 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     model = hydra.utils.instantiate(cfg.model)
 
-
-    
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
 
@@ -62,14 +65,14 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         cfg.trainer,
         callbacks=callbacks,
         logger=logger,
-        precision='16-mixed',
+        precision="16-mixed",
     )
 
     if cfg.resume:
         trainer.fit(
             model=model,
             train_dataloaders=datamodule.train_dataloader(),
-            val_dataloaders=datamodule.val_dataloader(),    
+            val_dataloaders=datamodule.val_dataloader(),
             ckpt_path=cfg.get("ckpt_path"),
         )
     else:
@@ -90,7 +93,9 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
 
 @hydra.main(
-    version_base="1.3", config_path="../cfgs_hydra", config_name="train_feature_fetal.yaml"
+    version_base="1.3",
+    config_path="../cfgs_hydra",
+    config_name="train_feature_fetal.yaml",
 )
 def main(cfg: DictConfig) -> Optional[float]:
     """Main entry point for training.
