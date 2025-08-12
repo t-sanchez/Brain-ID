@@ -40,13 +40,13 @@ class QCMetrics(Callback):
         if self.on_test:
             self._metrics["test"] = self._get_metrics_dict()
 
-        self._metrics_softmax = {}
-        if self.on_train:
-            self._metrics_softmax["train"] = self._get_metrics_dict()
-        if self.on_val:
-            self._metrics_softmax["val"] = self._get_metrics_dict()
-        if self.on_test:
-            self._metrics_softmax["test"] = self._get_metrics_dict()
+        # self._metrics_softmax = {}
+        # if self.on_train:
+        #     self._metrics_softmax["train"] = self._get_metrics_dict()
+        # if self.on_val:
+        #     self._metrics_softmax["val"] = self._get_metrics_dict()
+        # if self.on_test:
+        #     self._metrics_softmax["test"] = self._get_metrics_dict()
 
     def _train_and_pred_fetmrqc(self):
         rf = RandomForestClassifier()
@@ -74,21 +74,26 @@ class QCMetrics(Callback):
         }
 
     def _compute_metrics(self, trainer, pl_module, outputs, batch, split):
+        import pdb
+        #pdb.set_trace()
         batch = nested_dict_to_device(batch, "cpu")
         y_true = batch["label"]
         # y_true can be a tensor with values that are not 0 or 1, check it:
         if y_true.min() > 0:
             y_true = (y_true > 0.5).int()
-
-        y_pred = outputs["preds"][0]["pred"]
+        y_true = y_true[:, 1]  
+        y_pred = outputs["preds"][0]["pred"][:,1]
         # Softmax:
 
         for name, metric in self._metrics[split].items():
             metric.update(y_pred, y_true)
-        if y_pred.sum(dim=-1).max() != 1.0:
-            y_pred = y_pred.softmax(dim=-1)
-        for name, metric in self._metrics_softmax[split].items():
-            metric.update(y_pred, y_true)
+        #if y_pred.sum(dim=-1).max() != 1.0:
+        #    y_pred = y_pred.softmax(dim=-1)
+        
+        #ba = self._metrics[split]["ba"]
+        #print(ba.tp, ba.tn, ba.fp, ba.fn)
+        #for name, metric in self._metrics_softmax[split].items():
+        #    metric.update(y_pred, y_true)
         pl_module.log_dict(
             {
                 f"{split}/{name}": metric.compute()
@@ -99,15 +104,15 @@ class QCMetrics(Callback):
             batch_size=len(y_true),
         )
 
-        pl_module.log_dict(
-            {
-                f"{split}/{name}_softmax": metric.compute()
-                for name, metric in self._metrics_softmax[split].items()
-            },
-            on_step=True,
-            on_epoch=True,
-            batch_size=len(y_true),
-        )
+        # pl_module.log_dict(
+        #     {
+        #         f"{split}/{name}_softmax": metric.compute()
+        #         for name, metric in self._metrics_softmax[split].items()
+        #     },
+        #     on_step=True,
+        #     on_epoch=True,
+        #     batch_size=len(y_true),
+        # )
 
     def on_train_start(self, trainer, pl_module) -> None:
         """Lightning hook that is called when training begins."""
@@ -121,13 +126,13 @@ class QCMetrics(Callback):
     ):
         if self.on_train:
             self._compute_metrics(trainer, pl_module, outputs, batch, "train")
+            
 
     def on_validation_batch_end(
         self, trainer, pl_module, outputs, batch, batch_idx
     ):
         if self.on_val:
             self._compute_metrics(trainer, pl_module, outputs, batch, "val")
-
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if self.on_test:
             self._compute_metrics(trainer, pl_module, outputs, batch, "test")

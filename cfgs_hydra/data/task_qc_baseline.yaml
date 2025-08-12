@@ -1,22 +1,26 @@
 defaults:
-  - generator/generator_mild
+  - generator/qc_generator
   - transforms/inference
 
 generator:
   device: "cuda:0"  
 _target_: BrainID.datasets.dataloader.QCDataModule
 
-df: /home/tsanchez/Documents/mial/repositories/Brain-ID/data/qc_data2.csv
+df: /home/tsanchez/Documents/mial/repositories/Brain-ID/data/balanced_data_fold_large_0.csv
 train_split: "train"
 val_split: "val"
 test_split: "test"
 load_key: "im"
 target_key: "qcglobal"
-transform_target: "binarize"
+return_iqms: ${model.model.model.use_iqms}
+transform_target: "soft_binarize"
 target_threshold: 1.0
-reweight_train: True
+reweight_train: False
 num_workers: 0
 batch_size: 1
+
+augment_deform: True
+augment_artifact: False
 
 train_patch: False
 patch_size: null

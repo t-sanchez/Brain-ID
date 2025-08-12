@@ -5,18 +5,23 @@ defaults:
   - trainer: qc_trainer
   - logger: wandb
   - callbacks: task_qc_baseline
-#  - default_val
-#  #- submit
+  - override hydra/sweeper: sweeper
+  - override hydra/launcher: joblib
   - _self_
   
 ## job specific set ups ##
-exp_name: ISBI_ablations_qc
+exp_name: ISBI_qc_sweep
+trainer:
+  min_epochs: 0 # prevents early stopping
+  max_steps: 25000
 job_name: 
 logger:
   wandb:
-    name: s0_CNN5_FC3_noiqms_no_rew
+    name: 
     project: ${exp_name}
-
+hydra:
+  launcher:
+    n_jobs: 3   # parallel processes
 device: "cuda:0"
 
 eval_only: False 
@@ -29,9 +34,8 @@ resume_lr_scheduler: True
 freeze_feat: False
 load_backbone: False
 feat_ckpt:
-#train_fetal_cfg: '/home/tsanchez/Documents/mial/repositories/FetalSynthGen/configs'
 resume_training: False
-resume_ckpt: /home/tsanchez/Documents/mial/repositories/Brain-ID/outputs/ISBI_ablations_qc/None/2025-08-07/15-51-40/checkpoints/last.ckpt
+resume_ckpt: 
 ## paths 
 # out_dir: ISBI/${exp_name}/${job_name}
 

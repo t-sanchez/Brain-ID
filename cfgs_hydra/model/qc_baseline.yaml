@@ -1,28 +1,39 @@
 _target_: BrainID.models.baselines.baseline_lightning.BaselineModel
 task: "qc"
 n_batches_vis: 5
+freeze_cnn: False
+n_iter_freeze: 3000
 model:
-  _target_: BrainID.models.baselines.qc.Conv3_FC2
-  input_size: [1, 256, 256, 256]
-  norm: "instance"
-  gpu: True
-  output_size: 2
-  dropout: 0.1
-# model:
-#  _target_: BrainID.models.baselines.qc.ModelWrapper
-#  model:
-#    _target_: monai.networks.nets.DenseNet121
-#    spatial_dims: 3
-#    in_channels: 1
-#    out_channels: 2
-#    norm: "instance"
-criterion:
+  _target_: BrainID.models.baselines.qc.ModelWrapper 
+  # model:
+  #   _target_: BrainID.models.baselines.qc.IQMOnlyHead
+  #   d_iqm: 106
+  #   d_hidden: 256
+  #   dropout: 0.2
+  #   feat_dropout: 0.0
+  #   output_size: 2
+  #   use_iqms: true
+  model:
+    _target_: BrainID.models.baselines.qc.Conv5_FC3
+    input_size: [1, 256, 256, 256]
+    norm: "instance"
+    gpu: True
+    output_size: 2
+    dropout: 0.2
+    feature_drop: 0.0
+    use_iqms: false
 
+  #  _target_: BrainID.models.baselines.qc.DenseNet121
+  #  use_iqms: true
+  #  spatial_dims: 3
+  #  in_channels: 1
+  #  out_channels: 2
+  #  norm: "instance"
+criterion:
   _target_: BrainID.models.criterion.SetScalarCriterion
   device: ${device}
   loss_dict:
     ce:  1.
-
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: true
@@ -33,3 +44,4 @@ scheduler:
   _partial_: true
   patience: 5
   factor: 0.5
+

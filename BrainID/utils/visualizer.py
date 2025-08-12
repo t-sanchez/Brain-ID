@@ -8,12 +8,6 @@ import pdb
 import os
 
 
-def print_open_fds():
-    pid = os.getpid()
-    num_fds = len(os.listdir(f"/proc/{pid}/fd"))
-    print(f"[PID {pid}] Open file descriptors: {num_fds}")
-
-
 def get_slices(
     volume,
     directions=("axial", "coronal", "sagittal"),

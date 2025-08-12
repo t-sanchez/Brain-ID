@@ -210,7 +210,7 @@ class FeatureDataModule(L.LightningDataModule):
             sampler=sampler,
             multiprocessing_context="spawn" if self.num_workers > 0 else None,
             pin_memory=False,
-            timeout=120 if self.num_workers > 0 else 0,
+            #timeout=45 if self.num_workers > 0 else 0,
             # persistent_workers=True if self.num_workers > 0 else False,
         )
 
@@ -218,11 +218,11 @@ class FeatureDataModule(L.LightningDataModule):
         return DataLoader(
             self.val_ds,
             batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            multiprocessing_context="spawn" if self.num_workers > 0 else None,
+            num_workers=0,#self.num_workers,
+            #multiprocessing_context="spawn" if self.num_workers > 0 else None,
             collate_fn=self.collate,
             pin_memory=False,
-            timeout=120 if self.num_workers > 0 else 0,
+            #timeout=30 if self.num_workers > 0 else 0,
         )
 
     def test_dataloader(self):
@@ -231,11 +231,11 @@ class FeatureDataModule(L.LightningDataModule):
         return DataLoader(
             self.test_ds,
             batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            multiprocessing_context="spawn" if self.num_workers > 0 else None,
+            num_workers=0, #self.num_workers,
+            #multiprocessing_context="spawn" if self.num_workers > 0 else None,
             collate_fn=self.collate,
             pin_memory=False,
-            timeout=120 if self.num_workers > 0 else 0,
+            #timeout=30 if self.num_workers > 0 else 0,
         )
 
 
@@ -251,8 +251,11 @@ class QCDataModule(L.LightningDataModule):
         transforms: monai.transforms.Compose,
         load_key: str = "im",
         target_key: str = "qcglobal",
+        return_iqms: bool = False,
         transform_target: str = "binarize",
         target_threshold: float = 1.0,
+        augment_deform: bool = True,
+        augment_artifact: bool = True,
         b1: float = 6.0,
         b2: float = 3.0,
         num_workers: int = 1,
@@ -262,6 +265,7 @@ class QCDataModule(L.LightningDataModule):
         patch_size: int = 128,
         patch_boundary: int = 20,
         patch_per_subject: int = 3,
+        use_seg: bool = False,
     ):
         super().__init__()
         self.df = df
@@ -269,7 +273,10 @@ class QCDataModule(L.LightningDataModule):
         self.target_key = target_key
         self.load_key = load_key
         self.transform_target = transform_target
+        self.return_iqms = return_iqms
         self.target_threshold = target_threshold
+        self.augment_deform = augment_deform
+        self.augment_artifact = augment_artifact
         self.b1 = b1
         self.b2 = b2
         self.train_split = train_split
@@ -283,17 +290,21 @@ class QCDataModule(L.LightningDataModule):
         self.patch_size = patch_size
         self.patch_boundary = patch_boundary
         self.patch_per_subject = patch_per_subject
-
+        self.use_seg = use_seg
         self.train_ds = FetalScalarDataset(
             df=self.df,
             target_key=self.target_key,
             generator=self.generator,
             split=self.train_split,
             load_key=self.load_key,
+            return_iqms=self.return_iqms,
             transform_target=self.transform_target,
             target_threshold=self.target_threshold,
+            augment_deform=self.augment_deform,
+            augment_artifact=self.augment_artifact,
             b1=self.b1,
             b2=self.b2,
+            use_seg = self.use_seg
         )
 
         self.val_ds = FetalScalarDataset(
@@ -302,11 +313,16 @@ class QCDataModule(L.LightningDataModule):
             generator=self.generator,
             split=self.val_split,
             load_key=self.load_key,
+            return_iqms=self.return_iqms,
             transform_target=self.transform_target,
             target_threshold=self.target_threshold,
             b1=self.b1,
             b2=self.b2,
+            use_seg = self.use_seg
         )
+
+        if self.return_iqms:
+            self.val_ds.set_min_max_iqms(self.train_ds.iqms_min, self.train_ds.iqms_max)
 
         self.test_ds = FetalScalarDataset(
             df=self.df,
@@ -314,11 +330,16 @@ class QCDataModule(L.LightningDataModule):
             generator=self.generator,
             split=self.test_split,
             load_key=self.load_key,
+            return_iqms=self.return_iqms,
             transform_target=self.transform_target,
             target_threshold=self.target_threshold,
             b1=self.b1,
             b2=self.b2,
+            use_seg = self.use_seg
         )
+
+        if self.return_iqms:
+            self.test_ds.set_min_max_iqms(self.train_ds.iqms_min, self.train_ds.iqms_max)
 
         if self.train_patch:
             self.train_ds = RandomBlockPatchFetalDataset(

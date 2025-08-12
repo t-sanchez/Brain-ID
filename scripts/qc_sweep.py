@@ -1,6 +1,6 @@
 import torch.multiprocessing
-
 torch.multiprocessing.set_sharing_strategy("file_system")
+
 from typing import Any, Dict, List, Optional, Tuple
 import hydra
 import lightning as L
@@ -9,7 +9,9 @@ from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig, OmegaConf
 import os
-
+import faulthandler
+from optuna.integration import PyTorchLightningPruningCallback
+from hydra.core.hydra_config import HydraConfig
 
 from BrainID.utils import (
     RankedLogger,
@@ -17,32 +19,20 @@ from BrainID.utils import (
     instantiate_loggers,
 )
 
-os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"
-
-torch.set_float32_matmul_precision("high")
-log = RankedLogger(__name__, rank_zero_only=True)
-import faulthandler
-
+# Enable faulthandler for debugging segfaults
 faulthandler.enable()
 
+os.environ["TORCH_CUDA_ARCH_LIST"] = "8.9"
+torch.set_float32_matmul_precision("high")
 
-def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Trains the model. Can additionally evaluate on a testset, using best weights obtained during
-    training.
+log = RankedLogger(__name__, rank_zero_only=True)
 
-    This method is wrapped in optional @task_wrapper decorator, that controls the behavior during
-    failure. Useful for multiruns, saving info about the crash, etc.
 
-    :param cfg: A DictConfig configuration composed by Hydra.
-    :return: A tuple with metrics and dict with all instantiated objects.
-    """
-    # set seed for random number generators in pytorch, numpy and python.random
+def train(cfg: DictConfig) -> float:
+    """Train the model and return val/auroc_epoch for Optuna optimization."""
+
     if cfg.get("seed"):
         L.seed_everything(cfg.seed, workers=True)
-
-    # import pdb
-
-    # pdb.set_trace()
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
 
@@ -54,30 +44,28 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     log.info("Instantiating loggers...")
     logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
-    log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
 
+    # Pass Hydra config to WandB logger if present
     for lg in logger:
         if "WandbLogger" in lg.__class__.__name__:
             wandb_logger = lg
-            # Converts the OmegaConf into a regular nested dict
             wandb_logger.experiment.config.update(
-                OmegaConf.to_container(cfg, resolve=True)
+                OmegaConf.to_container(cfg, resolve=True),
+                allow_val_change=True
             )
             break
-    
+
+    log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
     trainer: Trainer = hydra.utils.instantiate(
         cfg.trainer,
         callbacks=callbacks,
         logger=logger,
-        # fast_dev_run=4,
-        # limit_train_batches=0.05,
-        # limit_val_batches=0.1,
     )
 
-    # Assert either load_backbone or resume_training is set
+    # Handle resume/backbone loading
     if cfg.load_backbone and cfg.resume_training:
         raise ValueError(
-            "Both load_backbone and resume_training are set. Please set only one of them."
+            "Both load_backbone and resume_training are set. Please set only one."
         )
     if cfg.load_backbone:
         model.load_feature_weights(cfg.get("feat_ckpt"))
@@ -88,15 +76,11 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     else:
         resume_ckpt = None
 
-    # If freeze_feat is set, freeze the feature extractor
     if cfg.get("freeze_feat", False):
-        import pdb
-
-        pdb.set_trace()
         log.info("Freezing feature extractor")
         for param in model.model.backbone.parameters():
             param.requires_grad = False
-
+    
     trainer.fit(
         model=model,
         train_dataloaders=datamodule.train_dataloader(),
@@ -104,22 +88,29 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         ckpt_path=resume_ckpt,
     )
 
+    # Retrieve AUROC after training
+    metric_name = "val/auroc_epoch"
+    if metric_name not in trainer.callback_metrics:
+        raise ValueError(
+            f"Metric '{metric_name}' not found in callback_metrics. "
+            "Make sure QCMetrics logs it with on_epoch=True."
+        )
+
+    auroc_val = trainer.callback_metrics[metric_name]
+    score = float(auroc_val.cpu().item())
+    log.info(f"Final {metric_name}: {score:.4f}")
+
+    return score
+
 
 @hydra.main(
     version_base="1.3",
     config_path="../cfgs_hydra",
     config_name="train_qc_fetal",
 )
-def main(cfg: DictConfig) -> Optional[float]:
-    """Main entry point for training.
-
-    :param cfg: DictConfig configuration composed by Hydra.
-    :return: Optional[float] with optimized metric value.
-    """
-    # apply extra utilities
-    # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
-    # train the model
-    train(cfg)
+def main(cfg: DictConfig) -> float:
+    """Hydra main entry point — returns metric for Optuna sweeper."""
+    return train(cfg)
 
 
 if __name__ == "__main__":

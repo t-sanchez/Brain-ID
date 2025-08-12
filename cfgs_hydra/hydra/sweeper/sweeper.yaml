@@ -1,0 +1,21 @@
+_target_: hydra_plugins.hydra_optuna_sweeper.optuna_sweeper.OptunaSweeper
+direction: maximize                     # or "minimize"
+study_name: qc_search
+storage: null
+n_trials: 40
+n_jobs: ${hydra.launcher.n_jobs}
+search_space: null
+custom_search_space: null
+sampler:
+  _target_: optuna.samplers.TPESampler
+params:
+  model.freeze_cnn: choice(True, False)
+  model.model.model.dropout: interval(0.0, 0.5)
+  model.model.model.feature_drop: interval(0.0, 0.5)
+  model.model.model.use_iqms: choice(True, False)
+  model.optimizer.lr: tag(log, interval(1e-5, 1e-3))
+  model.optimizer.weight_decay: tag(log, interval(1e-6, 1e-2))
+  data.transform_target: choice("soft_binarize", "binarize")
+  data.reweight_train: choice(True, False)
+  data.augment_deform: choice(True, False)
+  data.augment_artifact: choice(True, False)

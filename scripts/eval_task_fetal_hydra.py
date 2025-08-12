@@ -19,7 +19,7 @@ import faulthandler
 
 faulthandler.enable()
 
-def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def test(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Trains the model. Can additionally evaluate on a testset, using best weights obtained during
     training.
 
@@ -42,18 +42,12 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model = hydra.utils.instantiate(cfg.model)
 
-
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
-    log.info("Instantiating loggers...")
-    logger: List[Logger] = instantiate_loggers(cfg.get("logger"))
-    log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
-
 
     trainer: Trainer = hydra.utils.instantiate(
         cfg.trainer,
         callbacks=callbacks,
-        logger=logger,
         #fast_dev_run=4,
         #limit_train_batches=0.05,
         #limit_val_batches=0.1,
@@ -63,8 +57,6 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     
     resume_ckpt = cfg.get("resume_ckpt")
     weights = torch.load(resume_ckpt, map_location="cpu", weights_only=False)
-    import pdb
-    pdb.set_trace()
 
     trainer.test(model=model, dataloaders=datamodule.test_dataloader(), ckpt_path=resume_ckpt)
 
@@ -82,7 +74,7 @@ def main(cfg: DictConfig) -> Optional[float]:
     # apply extra utilities
     # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
     # train the model
-    train(cfg)
+    test(cfg)
 
 
 if __name__ == "__main__":

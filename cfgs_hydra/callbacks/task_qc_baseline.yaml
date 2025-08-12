@@ -25,17 +25,21 @@ visualizer:
 
 model_checkpoint:
   dirpath: ${paths.output_dir}/checkpoints
-  filename: "epoch_{epoch:03d}_val_{val/loss:.4f}_step_{step}"
-  monitor: "val/loss"
-  mode: "min"
+  filename: "epoch_{epoch:03d}_val_auc_{val/auroc_epoch:.4f}_step_{step}"
+  monitor: "val/auroc_epoch"
+  mode: "max"
   save_last: True
   auto_insert_metric_name: False
 
+save_predictions:
+  _target_: BrainID.utils.callbacks.LogPredictionsCallback
+  output_dir: ${paths.output_dir}/eval
+  output_file: "predictions.csv"
 
 early_stopping:
-  monitor: "val/loss"
-  patience: 200
-  mode: "min"
+  monitor: "val/auroc_epoch"
+  patience: 3
+  mode: "max"
 
 model_summary:
   max_depth: 1

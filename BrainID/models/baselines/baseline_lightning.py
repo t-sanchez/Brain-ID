@@ -7,11 +7,7 @@ from BrainID.models.joiner import get_joiner
 from BrainID.utils.misc import nested_dict_to_device
 from BrainID.utils.misc import nested_dict_copy
 import pdb
-
 import os
-
-
-
 
 class BaselineModel(LightningModule):
     def __init__(
@@ -22,6 +18,8 @@ class BaselineModel(LightningModule):
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         n_batches_vis: int = 3,
+        freeze_cnn: bool = False,
+        n_iter_freeze: int = 1500,
     ) -> None:
         """Initialize a UnetModule.
 
@@ -45,17 +43,30 @@ class BaselineModel(LightningModule):
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
         self.test_loss = MeanMetric()
-        
+
         self.input_key = "input"  # if self.task != "seg" else "image"
         self.visualization_data = []
+        self.freeze_cnn = freeze_cnn
+        self.n_iter_freeze = n_iter_freeze
+        self.frozen_cnn=False
+        if freeze_cnn:
+            self.model.freeze_cnn()
+            self.frozen_cnn = True
 
-    def forward(self, samples: torch.Tensor) -> torch.Tensor:
+        
+        
+
+    def forward(self, samples: torch.Tensor, iqms=None) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
 
         :param samples: An input dictionary
         :return: A dictionary of outputs
         """
-        outputs, _ = self.model(samples)
+
+        if iqms is not None:
+            outputs, _ = self.model(samples, iqms=iqms)
+        else:
+            outputs, _ = self.model(samples)
 
         return outputs
 
@@ -77,9 +88,10 @@ class BaselineModel(LightningModule):
             - A tensor of predictions.
             - A tensor of target labels.
         """
+        
         batch = nested_dict_to_device(batch, self.device)
-
-        outputs = self.forward(batch[self.input_key])
+        
+        outputs = self.forward(batch[self.input_key], batch.get("iqms", None))
 
         subjects = {k: batch[k] for k in batch.keys() if k != self.input_key}
         samples = [{self.input_key: x} for x in batch[self.input_key]]
@@ -128,9 +140,11 @@ class BaselineModel(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-
+        
+        
+        
         losses, preds, targets = self.model_step(batch)
-
+        # Check nan in loss
         self.val_loss(losses["loss"])
         self.log_dict(
             {f"val/{k}": v for k, v in losses.items()},
@@ -183,6 +197,11 @@ class BaselineModel(LightningModule):
             )
 
         return {"loss": losses["loss"], "preds": preds}
+
+    def on_train_batch_start(self, batch, batch_idx):
+        if self.global_step >= self.n_iter_freeze and self.frozen_cnn:
+            self.model.unfreeze_cnn()
+            self.frozen_cnn = False
 
     def on_train_epoch_end(self):
         torch.cuda.empty_cache()
