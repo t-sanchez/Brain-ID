@@ -21,7 +21,7 @@ logger:
     project: ${exp_name}
 hydra:
   launcher:
-    n_jobs: 3   # parallel processes
+    n_jobs: 1   # parallel processes
 device: "cuda:0"
 
 eval_only: False 
